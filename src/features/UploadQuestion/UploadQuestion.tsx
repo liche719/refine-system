@@ -5,6 +5,7 @@ import {
   CloudUpload,
   FileCheck2,
   FileText,
+  LoaderCircle,
   Lightbulb,
   ScanText,
   X,
@@ -119,10 +120,23 @@ export default function UploadQuestionPage() {
               </Button>
             )}
             <Button onClick={upload} disabled={!selectedFile || uploading}>
-              {uploading ? '正在识别...' : '开始识别'}
-              <ScanText className="size-4" />
+              {uploading ? '正在识别并入库...' : '开始识别'}
+              {uploading ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <ScanText className="size-4" />
+              )}
             </Button>
           </div>
+          {uploading && (
+            <div className="upload-progress" role="status" aria-live="polite">
+              <span className="upload-progress-track" aria-hidden="true" />
+              <div>
+                <strong>正在等待 OCR 与错题归档完成</strong>
+                <p>识别完成后会自动打开解析页；请不要关闭当前页面。</p>
+              </div>
+            </div>
+          )}
         </section>
 
         <aside className="upload-process">
@@ -145,7 +159,10 @@ export default function UploadQuestionPage() {
               text: '通过流式 AI 获得解题思路。',
             },
           ].map(({ icon: Icon, title, text }, index) => (
-            <article key={title}>
+            <article
+              key={title}
+              className={uploading ? 'is-processing' : undefined}
+            >
               <span>{index + 1}</span>
               <Icon className="size-5" />
               <div>

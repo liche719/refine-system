@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   fetchRootPoints,
   fetchDefinition,
@@ -41,8 +42,8 @@ export const useKnowledgePage = () => {
       try {
         const res = await fetchRootPoints({ subject: '数学' });
         if (res.success) setRootPoints(res.data);
-      } catch (error) {
-        console.error('Failed to fetch root points', error);
+      } catch {
+        toast.error('知识点加载失败，请稍后重试');
       }
     };
     fetchRoot();

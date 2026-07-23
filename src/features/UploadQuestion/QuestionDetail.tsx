@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, BookMarked, Save, Square } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BookMarked,
+  RefreshCw,
+  Save,
+  Square,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { AiChatPanel } from '@/components/business/AiChatPanel';
 import EmptyState from '@/components/common/EmptyState';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import MarkdownContent from '@/components/common/MarkdownContent';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -61,6 +69,8 @@ export default function QuestionDetailPage() {
   const returnLabel = returnTo === '/my-question' ? '返回我的错题' : '返回上传';
   const [solution, setSolution] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [solutionError, setSolutionError] = useState<string | null>(null);
+  const [solutionAttempt, setSolutionAttempt] = useState(0);
   const [reasons, setReasons] = useState<ReasonValues>(EMPTY_REASONS);
   const [otherReason, setOtherReason] = useState('');
   const [note, setNote] = useState('');
@@ -119,26 +129,35 @@ export default function QuestionDetailPage() {
         })
         .catch((error) => toast.error(errorMessage(error, '错题信息加载失败')));
     }
+  }, [result?.questionId, returnTo]);
 
+  useEffect(() => {
+    if (!result) return;
     const nextController = new AbortController();
     controller.current = nextController;
     setStreaming(true);
     setSolution('');
+    setSolutionError(null);
     solveStream({
       question: result.questionText,
       signal: nextController.signal,
       onMessage: (value) => setSolution((current) => current + value),
-      onError: (error) => toast.error(errorMessage(error, 'AI 解析失败')),
-    }).finally(() => setStreaming(false));
+    })
+      .catch((error) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          const message = errorMessage(error, 'AI 解析失败，请稍后重试');
+          setSolutionError(message);
+          toast.error(message);
+        }
+      })
+      .finally(() => setStreaming(false));
     return () => nextController.abort();
-  }, [result?.questionId, returnTo]);
+  }, [result?.questionId, solutionAttempt]);
 
   if (detailLoading) {
     return (
       <main className="app-page">
-        <p className="text-center text-sm text-muted-foreground">
-          正在加载错题详情...
-        </p>
+        <LoadingSpinner text="正在加载错题详情" />
       </main>
     );
   }
@@ -249,6 +268,23 @@ export default function QuestionDetailPage() {
               <p className="text-sm text-muted-foreground">
                 {streaming ? '正在生成解答...' : '暂无解答'}
               </p>
+            )}
+            {solutionError && (
+              <div className="ai-error-state" role="alert">
+                <AlertTriangle className="size-4 shrink-0" />
+                <div>
+                  <strong>本次 AI 解析未完成</strong>
+                  <p>{solutionError}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSolutionAttempt((attempt) => attempt + 1)}
+                  disabled={streaming}
+                >
+                  <RefreshCw className="size-3.5" /> 重试
+                </Button>
+              </div>
             )}
           </article>
         </section>

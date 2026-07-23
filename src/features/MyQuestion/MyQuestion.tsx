@@ -231,6 +231,11 @@ export default function MyQuestionPage() {
               icon={CheckSquare2}
               title="没有匹配的错题"
               description="调整筛选条件，或先上传一道题目。"
+              action={
+                <Button size="sm" onClick={() => navigate('/upload-question')}>
+                  上传错题
+                </Button>
+              }
             />
           ) : (
             <div className="grid gap-3 md:grid-cols-2">

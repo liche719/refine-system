@@ -6,23 +6,16 @@ const API_VERSION = import.meta.env.VITE_API_VERSION || 'v1';
 export interface SolveStreamOptions {
   question: string;
   onMessage: (text: string) => void;
-  onError: (error: unknown) => void;
   signal?: AbortSignal;
 }
 
-export async function solveStream(options: SolveStreamOptions) {
-  try {
-    await consumeSse({
-      url: `/api/${API_VERSION}/solve/stream`,
-      body: { questionContext: options.question },
-      signal: options.signal,
-      onMessage: options.onMessage,
-    });
-  } catch (error) {
-    if (!(error instanceof DOMException && error.name === 'AbortError')) {
-      options.onError(error);
-    }
-  }
+export function solveStream(options: SolveStreamOptions) {
+  return consumeSse({
+    url: `/api/${API_VERSION}/solve/stream`,
+    body: { questionContext: options.question },
+    signal: options.signal,
+    onMessage: options.onMessage,
+  });
 }
 
 export function sendMessage(data: {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ReactFlow, {
   Background,
   Controls,
@@ -55,6 +56,7 @@ const EMPTY_RELATED: RelatedData = { questions: [], note: '' };
 const ALL_SUBJECTS = '__all__';
 
 export default function KnowledgePointPage() {
+  const navigate = useNavigate();
   const [subject, setSubject] = useState(ALL_SUBJECTS);
   const [roots, setRoots] = useState<KnowledgePointNode[]>([]);
   const [active, setActive] = useState<KnowledgePointNode | null>(null);
@@ -177,6 +179,11 @@ export default function KnowledgePointPage() {
           icon={LibraryBig}
           title="暂无知识点"
           description="上传并解析错题后，知识点会自动沉淀在这里。"
+          action={
+            <Button size="sm" onClick={() => navigate('/upload-question')}>
+              上传错题
+            </Button>
+          }
         />
       ) : (
         <div className="knowledge-layout">

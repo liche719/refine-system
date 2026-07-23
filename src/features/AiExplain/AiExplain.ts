@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   deleteConversation,
   sendMessage,
   solveWithContext,
 } from '@/services/apis/aiapi';
+import { errorMessage } from '@/utils/api';
 
 export interface Message {
   id: string;
@@ -143,13 +145,15 @@ export const useAiExplain = (
       }
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        console.error('Stream Error:', error);
+        const message = errorMessage(error, 'AI 暂时无法响应，请稍后重试');
+        toast.error(message);
+        setInput(userText);
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === aiMsgId
               ? {
                   ...msg,
-                  content: `${msg.content}\n\n> 网络请求中断或出错，请重试。`,
+                  content: `${msg.content}\n\n> ⚠️ ${message}\n> 已恢复你的问题，可检查后重新发送。`,
                   isStreaming: false,
                 }
               : msg,
