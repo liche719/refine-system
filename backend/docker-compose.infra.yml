@@ -16,6 +16,7 @@ services:
       - --skip-name-resolve=ON
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_ROOT_HOST: "%"
       IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD in .env}
       LEARNING_DB_PASSWORD: ${LEARNING_DB_PASSWORD:?Set LEARNING_DB_PASSWORD in .env}
       AI_DB_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in .env}
@@ -47,6 +48,7 @@ services:
       - --skip-name-resolve=ON
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_ROOT_HOST: "%"
     ports:
       - "127.0.0.1:3307:3306"
     volumes:

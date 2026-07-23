@@ -20,10 +20,13 @@ Copy-Item .env.example .env
 docker compose -p refine-microservices --env-file .env -f docker-compose.infra.yml up -d
 
 # 在 IDE 中按 identity → learning → ai → gateway 顺序启动；或使用 Maven。
-mvn -pl refine-identity-service spring-boot:run
-mvn -pl refine-learning-service spring-boot:run
-mvn -pl refine-ai-service spring-boot:run
-mvn -pl refine-gateway spring-boot:run
+# 首次从仓库启动时，先安装 reactor 内的公共模块；之后仅在公共模块变更后重跑此命令。
+mvn clean install -DskipTests
+
+java -jar backend/refine-identity-service/target/refine-identity-service-1.0.0-SNAPSHOT.jar
+java -jar backend/refine-learning-service/target/refine-learning-service-1.0.0-SNAPSHOT.jar
+java -jar backend/refine-ai-service/target/refine-ai-service-1.0.0-SNAPSHOT.jar
+java -jar backend/refine-gateway/target/refine-gateway-1.0.0-SNAPSHOT.jar
 Pop-Location
 ```
 
