@@ -2,7 +2,7 @@
 title: Refine 项目技术说明与验证指南
 date: 2026-07-23
 updated: 2026-07-23
-project: refine-microservices
+project: refine-system-backend
 type: demo-guide
 status: active
 version: 1.0
@@ -145,7 +145,7 @@ Invoke-WebRequest http://localhost:8103/api/v1/learning-analysis/insights `
 mvn -f .\pom.xml verify
 
 # 前端
-Push-Location ..\refine-frontend
+Push-Location ..\frontend
 npm run type-check
 npm test
 npm run lint

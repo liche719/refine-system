@@ -1,68 +1,69 @@
-# Refine Microservices
+# Refine System
 
-这是 Refine 的并行微服务版本。原 DDD 单体不参与本工程 Maven reactor，也不需要修改；新版每个业务服务内部继续按领域组织代码。
+Refine 是一个面向错题沉淀、知识点复习和 AI 辅助学习的全栈项目。仓库将微服务后端与 React 前端放在同一版本库中，但保持独立构建、独立依赖与独立本地配置。
 
-## 模块
+## 目录
 
-| 模块 | 端口 | 职责 |
-|---|---:|---|
-| `refine-gateway` | 8080 | 路由、JWT、身份头清洗、CORS、Sentinel 限流 |
-| `refine-identity-service` | 8101 | 注册、登录、邮箱验证码、密码和令牌 |
-| `refine-learning-service` | 8102 | 错题、知识点、复习、概览 |
-| `refine-ai-service` | 8103 | AI/OCR、会话、题目生成、学习分析、RAG |
-| `refine-common` | - | 统一响应、异常、用户上下文、主从路由 |
-| `refine-contracts` | - | Feign DTO 和 RabbitMQ 事件线协议 |
-
-## 快速开始
-
-先创建本地环境文件并替换所有 `change-me` 值：
-
-```powershell
-Copy-Item .env.example .env
+```text
+refine-system/
+├─ backend/   # Java 21 / Spring Boot 微服务、Compose、运维脚本与技术文档
+└─ frontend/  # React / Vite 学习端
 ```
 
-仅启动基础设施，Java 服务从 IDE 或 Maven 运行：
+## 本地启动
+
+### 1. 启动后端基础设施与服务
 
 ```powershell
+Push-Location backend
+Copy-Item .env.example .env
 docker compose -p refine-microservices --env-file .env -f docker-compose.infra.yml up -d
-.\deploy\skywalking\install-agent.ps1
 
-# 在每个 IDE/Maven 进程中增加 VM option，并设置对应服务名：
-# -javaagent:<项目目录>\.runtime\skywalking\agent\skywalking-agent.jar
-# SW_AGENT_NAME=refine-identity-service
-# SW_AGENT_COLLECTOR_BACKEND_SERVICES=localhost:11800
-
+# 在 IDE 中按 identity → learning → ai → gateway 顺序启动；或使用 Maven。
 mvn -pl refine-identity-service spring-boot:run
 mvn -pl refine-learning-service spring-boot:run
 mvn -pl refine-ai-service spring-boot:run
 mvn -pl refine-gateway spring-boot:run
+Pop-Location
 ```
 
-完整容器化启动：
+后端配置、完整 Compose 与故障演练见 [backend/README.md](backend/README.md) 和 [backend/docs/OPERATIONS.md](backend/docs/OPERATIONS.md)。敏感配置只保存在 `backend/.env`，不可提交。
+
+### 2. 启动前端
 
 ```powershell
-mvn verify
-docker compose -p refine-microservices --env-file .env -f docker-compose.yml up -d --build
+Push-Location frontend
+Copy-Item .env.example .env
+npm install
+npm run dev
+Pop-Location
 ```
 
-验证构建和运行状态：
+前端默认将 `/api/**` 代理到 `http://localhost:8080`。需要调整 Gateway 地址时，在 `frontend/.env` 设置 `VITE_PROXY_URL`。
+
+## 验证
 
 ```powershell
+Push-Location backend
 mvn verify
-.\deploy\scripts\health-check.ps1
-.\deploy\scripts\verify-skywalking.ps1
-.\deploy\scripts\check-replication.ps1
-.\deploy\scripts\verify-schema-isolation.ps1
+Pop-Location
+
+Push-Location frontend
+npm run type-check
+npm test
+npm run lint
+npm run build
+Pop-Location
 ```
 
-控制台地址：Nacos `http://localhost:8848/nacos`，Sentinel `http://localhost:8858`，RabbitMQ `http://localhost:15672`，SkyWalking `http://localhost:8088`，BanyanDB `http://localhost:17913`。
+## 主要技术
 
-Flyway 演示账号为 `demo@refine.local` / `RefineDemo123`，只用于本地演示，不应部署到真实环境。
+- 后端：Java 21、Spring Boot 3、Spring Cloud Alibaba、Nacos、Sentinel、OpenFeign、RabbitMQ、MyBatis、Flyway、Redis、PgVector、LangChain4j。
+- 前端：React 19、TypeScript、Vite、Tailwind CSS、React Router、React Markdown。
+- 可观测性：SkyWalking、BanyanDB。
 
-详细设计见 [架构说明](docs/ARCHITECTURE.md) 和 [运行手册](docs/OPERATIONS.md)。
+## 约定
 
-本地联调、技术设计和验证命令见 [项目技术说明与验证指南](docs/DEMO_GUIDE.md)。
-
-## 回退
-
-停止新版 Compose 后重新启动旧 `refine-app:8091`。新版使用独立端口、目录和数据库，不需要回滚旧单体文件。
+- `backend/` 和 `frontend/` 都有独立 `.env`；仅提交各自的 `.env.example`。
+- 前端所有业务请求经 Gateway，不直连 `8101`、`8102`、`8103`。
+- 后端的数据库、消息和内部接口边界见 [backend/docs/ARCHITECTURE.md](backend/docs/ARCHITECTURE.md)。

@@ -4,10 +4,10 @@
 
 ## 本地运行
 
-环境要求：Node.js 22.12+、npm 10+，以及已启动的 `refine-microservices`。
+环境要求：Node.js 22.12+、npm 10+，以及已启动的 `../backend` 微服务。
 
 ```powershell
-cd C:\Users\33721\Desktop\简历项目\refine-project\refine-frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -45,7 +45,7 @@ npm audit
 
 ## 本地联调
 
-先启动 `../refine-microservices` 的基础设施与四个 Java 服务，再运行 `npm run dev`。浏览器只访问 `http://localhost:5173`，所有 `/api/**` 请求由 Vite 转发到 Gateway；不要将浏览器请求改为直连 `8101`、`8102` 或 `8103`。
+先启动 `../backend` 的基础设施与四个 Java 服务，再运行 `npm run dev`。浏览器只访问 `http://localhost:5173`，所有 `/api/**` 请求由 Vite 转发到 Gateway；不要将浏览器请求改为直连 `8101`、`8102` 或 `8103`。
 
 本地验收顺序：登录、首页、错题库、知识点库、刷新错题详情页、AI 解题与问答、OCR 上传、生成练习题、判题 SSE。前端的 `npm run type-check`、`npm test`、`npm run lint` 与 `npm run build` 应全部通过。
 
@@ -57,4 +57,4 @@ npm audit
 - 动态知识图谱、关联错题、知识点状态和生成练习题。
 - AI 解题、生成题判题及 SSE 流式响应。
 
-后端工程位于相邻目录 `..\refine-microservices`。内部服务端口、JWT、`X-User-Id` 清洗和 `X-Internal-Token` 均由微服务侧控制，前端只通过 Gateway 访问公共 API。
+后端工程位于相邻目录 `../backend`。内部服务端口、JWT、`X-User-Id` 清洗和 `X-Internal-Token` 均由微服务侧控制，前端只通过 Gateway 访问公共 API。

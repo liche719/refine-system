@@ -2,7 +2,7 @@
 
 ## 敏感配置
 
-根目录 `.env` 只保存密码、Token 和 API Key。`.env.example` 是完整键清单：
+`backend/` 目录的 `.env` 只保存密码、Token 和 API Key。`.env.example` 是完整键清单：
 
 - 数据库、RabbitMQ、PgVector 和邮箱密码
 - JWT Secret、内部调用 Token 与 Gateway 令牌
