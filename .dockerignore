@@ -1,0 +1,16 @@
+**/target/**
+!refine-gateway/target/
+!refine-gateway/target/refine-gateway-*.jar
+!refine-identity-service/target/
+!refine-identity-service/target/refine-identity-service-*.jar
+!refine-learning-service/target/
+!refine-learning-service/target/refine-learning-service-*.jar
+!refine-ai-service/target/
+!refine-ai-service/target/refine-ai-service-*.jar
+.runtime/**
+!.runtime/skywalking/
+!.runtime/skywalking/apache-skywalking-java-agent-9.6.0.tgz
+.git
+.idea
+.vscode
+*.iml

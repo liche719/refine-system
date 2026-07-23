@@ -1,0 +1,17 @@
+{
+  "traceId": "$any",
+  "code": 200,
+  "info": "$any-string",
+  "data": {
+    "userId": "user-1",
+    "questionId": "question-1",
+    "isCareless": 1,
+    "isUnfamiliar": 0,
+    "isCalculateErr": 0,
+    "isTimeShortage": 0,
+    "otherReason": 0,
+    "otherReasonText": null,
+    "success": true,
+    "message": "$any-string"
+  }
+}

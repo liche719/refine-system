@@ -1,0 +1,27 @@
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: nacos:8848
+      config:
+        server-addr: nacos:8848
+    sentinel:
+      transport:
+        dashboard: sentinel:8858
+      datasource:
+        flow-rules:
+          nacos:
+            server-addr: nacos:8848
+  data:
+    redis:
+      host: ai-redis
+  rabbitmq:
+    host: rabbitmq
+
+refine:
+  datasource:
+    primary-url: jdbc:mysql://mysql-primary:3306/ai_db?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+    replica-url: jdbc:mysql://mysql-replica:3306/ai_db?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+  pgvector:
+    url: jdbc:postgresql://pgvector:5432/vector_db
+    document-path: /app/docs/rag

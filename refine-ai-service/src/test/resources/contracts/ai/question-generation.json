@@ -1,0 +1,9 @@
+{
+  "traceId": "$any",
+  "code": 200,
+  "info": "$any-string",
+  "data": {
+    "questionId": "generated-1",
+    "content": "What is 3 + 4?"
+  }
+}

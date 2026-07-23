@@ -1,0 +1,9 @@
+{
+  "traceId": "$any",
+  "code": 200,
+  "info": "$any-string",
+  "data": {
+    "newAccessToken": "new-access",
+    "newRefreshToken": "new-refresh"
+  }
+}

@@ -1,0 +1,7 @@
+[
+  {"resource":"identity-login","resourceMode":0,"grade":1,"count":10,"intervalSec":1,"controlBehavior":0,"burst":5},
+  {"resource":"ai-ocr","resourceMode":0,"grade":1,"count":3,"intervalSec":1,"controlBehavior":0,"burst":1},
+  {"resource":"ai-question","resourceMode":0,"grade":1,"count":5,"intervalSec":1,"controlBehavior":0,"burst":2},
+  {"resource":"ai-service","resourceMode":0,"grade":1,"count":20,"intervalSec":1,"controlBehavior":0,"burst":5}
+]
+

@@ -1,0 +1,10 @@
+题目：
+{{question}}
+
+标准答案：
+{{expectedAnswer}}
+
+学生答案：
+{{userAnswer}}
+
+请进行判定并解释。

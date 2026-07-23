@@ -1,0 +1,9 @@
+{
+  "code": 200,
+  "info": "$any-string",
+  "data": {
+    "questionId": "question-1",
+    "questionText": "2 + 2",
+    "subject": "math"
+  }
+}

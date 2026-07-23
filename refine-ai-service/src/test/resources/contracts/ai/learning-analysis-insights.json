@@ -1,0 +1,16 @@
+{
+  "traceId": "$any",
+  "code": 200,
+  "info": "$any-string",
+  "data": [
+    {
+      "type": "weakness",
+      "title": "Algebra",
+      "description": "Review equations",
+      "confidenceScore": 0.8,
+      "relatedQuestions": ["question-1"],
+      "createdAt": null,
+      "isActive": true
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+
+[*.{java,xml,yml,yaml,json,md,sql,ps1,sh,properties}]
+charset = utf-8
+

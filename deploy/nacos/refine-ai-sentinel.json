@@ -1,0 +1,5 @@
+[
+  {"resource":"GET:http://refine-learning-service/internal/v1/knowledge-points/recent","grade":1,"count":20,"strategy":0,"controlBehavior":0,"limitApp":"default"},
+  {"resource":"POST:http://refine-learning-service/internal/v1/mistakes","grade":1,"count":10,"strategy":0,"controlBehavior":0,"limitApp":"default"}
+]
+

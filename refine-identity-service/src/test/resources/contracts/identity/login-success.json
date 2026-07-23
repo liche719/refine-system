@@ -1,0 +1,11 @@
+{
+  "traceId": "$any",
+  "code": 200,
+  "info": "$any-string",
+  "data": {
+    "userId": "user-1",
+    "userName": "Student",
+    "accessToken": "access-token",
+    "refreshToken": "refresh-token"
+  }
+}

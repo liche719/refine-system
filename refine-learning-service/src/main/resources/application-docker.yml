@@ -1,0 +1,14 @@
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: nacos:8848
+      config:
+        server-addr: nacos:8848
+  rabbitmq:
+    host: rabbitmq
+
+refine:
+  datasource:
+    primary-url: jdbc:mysql://mysql-primary:3306/learning_db?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+    replica-url: jdbc:mysql://mysql-replica:3306/learning_db?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC

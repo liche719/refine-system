@@ -1,0 +1,8 @@
+{
+  "contentType": "text/event-stream",
+  "events": [
+    { "event": "message", "data": "Correct." },
+    { "event": "message", "data": "Explain the carry step." }
+  ],
+  "completed": true
+}

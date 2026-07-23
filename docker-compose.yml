@@ -1,0 +1,156 @@
+name: refine-microservices
+
+services:
+  mysql-primary:
+    extends: {file: docker-compose.infra.yml, service: mysql-primary}
+  mysql-replica:
+    extends: {file: docker-compose.infra.yml, service: mysql-replica}
+  mysql-replica-init:
+    extends: {file: docker-compose.infra.yml, service: mysql-replica-init}
+  nacos:
+    extends: {file: docker-compose.infra.yml, service: nacos}
+  nacos-config-init:
+    extends: {file: docker-compose.infra.yml, service: nacos-config-init}
+  sentinel:
+    extends: {file: docker-compose.infra.yml, service: sentinel}
+  rabbitmq:
+    extends: {file: docker-compose.infra.yml, service: rabbitmq}
+  identity-redis:
+    extends: {file: docker-compose.infra.yml, service: identity-redis}
+  ai-redis:
+    extends: {file: docker-compose.infra.yml, service: ai-redis}
+  pgvector:
+    extends: {file: docker-compose.infra.yml, service: pgvector}
+  banyandb:
+    extends: {file: docker-compose.infra.yml, service: banyandb}
+  skywalking-oap:
+    extends: {file: docker-compose.infra.yml, service: skywalking-oap}
+  skywalking-ui:
+    extends: {file: docker-compose.infra.yml, service: skywalking-ui}
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args: {MODULE: refine-identity-service}
+    environment:
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD in .env}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Set INTERNAL_TOKEN in .env}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN in .env}
+      MAIL_USERNAME: ${MAIL_USERNAME:?Set MAIL_USERNAME in .env}
+      SPRING_PROFILES_ACTIVE: docker
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?Set MAIL_PASSWORD in .env}
+      SW_AGENT_NAME: refine-identity-service
+      SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
+      SW_AGENT_SAMPLE_N_PER_3_SECS: -1
+    depends_on:
+      mysql-replica-init: {condition: service_completed_successfully}
+      nacos-config-init: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+      identity-redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8101 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q ' 200' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [refine]
+
+  learning-service:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args: {MODULE: refine-learning-service}
+    environment:
+      LEARNING_DB_PASSWORD: ${LEARNING_DB_PASSWORD:?Set LEARNING_DB_PASSWORD in .env}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Set INTERNAL_TOKEN in .env}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN in .env}
+      SPRING_PROFILES_ACTIVE: docker
+      SW_AGENT_NAME: refine-learning-service
+      SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
+      SW_AGENT_SAMPLE_N_PER_3_SECS: -1
+    depends_on:
+      mysql-replica-init: {condition: service_completed_successfully}
+      nacos-config-init: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8102 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q ' 200' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [refine]
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args: {MODULE: refine-ai-service}
+    environment:
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in .env}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD:?Set PGVECTOR_PASSWORD in .env}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Set INTERNAL_TOKEN in .env}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env}
+      OPENAI_EMBEDDING_API_KEY: ${OPENAI_EMBEDDING_API_KEY:?Set OPENAI_EMBEDDING_API_KEY in .env}
+      OCR_API_KEY: ${OCR_API_KEY:?Set OCR_API_KEY in .env}
+      SPRING_PROFILES_ACTIVE: docker
+      SW_AGENT_NAME: refine-ai-service
+      SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
+      SW_AGENT_SAMPLE_N_PER_3_SECS: -1
+    volumes:
+      - ./docs/rag:/app/docs/rag:ro
+    depends_on:
+      mysql-replica-init: {condition: service_completed_successfully}
+      nacos-config-init: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+      ai-redis: {condition: service_healthy}
+      pgvector: {condition: service_healthy}
+      learning-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8103 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q ' 200' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [refine]
+
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args: {MODULE: refine-gateway}
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN in .env}
+      SPRING_PROFILES_ACTIVE: docker
+      SW_AGENT_NAME: refine-gateway
+      SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
+      SW_AGENT_SAMPLE_N_PER_3_SECS: -1
+    ports: ["8080:8080"]
+    depends_on:
+      nacos-config-init: {condition: service_completed_successfully}
+      identity-service: {condition: service_healthy}
+      learning-service: {condition: service_healthy}
+      ai-service: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q ' 200' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [refine]
+
+networks:
+  refine:
+    name: refine-network
+
+volumes:
+  mysql-primary-data:
+  mysql-replica-data:
+  rabbitmq-data:
+  identity-redis-data:
+  ai-redis-data:
+  pgvector-data:
+  banyandb-stream-data:
+  banyandb-measure-data:

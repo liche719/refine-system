@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mysql --protocol=socket -uroot -p"${MYSQL_ROOT_PASSWORD}" <<SQL
+CREATE DATABASE IF NOT EXISTS identity_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS learning_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS ai_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'identity_app'@'%' IDENTIFIED BY '${IDENTITY_DB_PASSWORD}';
+CREATE USER IF NOT EXISTS 'learning_app'@'%' IDENTIFIED BY '${LEARNING_DB_PASSWORD}';
+CREATE USER IF NOT EXISTS 'ai_app'@'%' IDENTIFIED BY '${AI_DB_PASSWORD}';
+CREATE USER IF NOT EXISTS 'refine_repl'@'%' IDENTIFIED BY '${MYSQL_REPLICATION_PASSWORD}';
+
+GRANT ALL PRIVILEGES ON identity_db.* TO 'identity_app'@'%';
+GRANT ALL PRIVILEGES ON learning_db.* TO 'learning_app'@'%';
+GRANT ALL PRIVILEGES ON ai_db.* TO 'ai_app'@'%';
+GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'refine_repl'@'%';
+FLUSH PRIVILEGES;
+SQL
+

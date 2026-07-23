@@ -1,0 +1,238 @@
+name: refine-infra
+
+services:
+  mysql-primary:
+    image: mysql:8.0.32
+    command:
+      - mysqld
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --binlog-expire-logs-seconds=604800
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+      - --skip-name-resolve=ON
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD in .env}
+      LEARNING_DB_PASSWORD: ${LEARNING_DB_PASSWORD:?Set LEARNING_DB_PASSWORD in .env}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in .env}
+      MYSQL_REPLICATION_PASSWORD: ${MYSQL_REPLICATION_PASSWORD:?Set MYSQL_REPLICATION_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-primary-data:/var/lib/mysql
+      - ./deploy/mysql/init-primary.sh:/docker-entrypoint-initdb.d/10-init-primary.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [refine]
+
+  mysql-replica:
+    image: mysql:8.0.32
+    command:
+      - mysqld
+      - --server-id=2
+      - --relay-log=mysql-relay-bin
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON
+      - --skip-replica-start=ON
+      - --skip-name-resolve=ON
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql-replica-data:/var/lib/mysql
+      - ./deploy/mysql/init-replica.sh:/docker-entrypoint-initdb.d/10-init-replica.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [refine]
+
+  mysql-replica-init:
+    image: mysql:8.0.32
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_REPLICATION_PASSWORD: ${MYSQL_REPLICATION_PASSWORD:?Set MYSQL_REPLICATION_PASSWORD in .env}
+    volumes:
+      - ./deploy/mysql/configure-replica.sh:/configure-replica.sh:ro
+    entrypoint: ["bash", "/configure-replica.sh"]
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+      mysql-replica:
+        condition: service_healthy
+    networks: [refine]
+
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+    ports:
+      - "127.0.0.1:8848:8848"
+      - "127.0.0.1:9848:9848"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/v1/console/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [refine]
+
+  nacos-config-init:
+    image: curlimages/curl:8.8.0
+    restart: "no"
+    environment:
+      NACOS_ADDR: nacos:8848
+    volumes:
+      - ./deploy/nacos:/config:ro
+    entrypoint: ["sh", "/config/publish-config.sh"]
+    depends_on:
+      nacos:
+        condition: service_healthy
+    networks: [refine]
+
+  sentinel:
+    image: bladex/sentinel-dashboard:1.8.8
+    environment:
+      JAVA_OPTS: -Dserver.port=8858 -Dcsp.sentinel.dashboard.server=localhost:8858
+    ports:
+      - "127.0.0.1:8858:8858"
+    networks: [refine]
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: refine
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./deploy/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [refine]
+
+  identity-redis:
+    image: redis:7.4
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - identity-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [refine]
+
+  ai-redis:
+    image: redis:7.4
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - ai-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [refine]
+
+  pgvector:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: vector_db
+      POSTGRES_USER: refine
+      POSTGRES_PASSWORD: ${PGVECTOR_PASSWORD:?Set PGVECTOR_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgvector-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d vector_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [refine]
+
+  banyandb:
+    image: apache/skywalking-banyandb:0.10.2
+    command: standalone --stream-root-path /data/stream --measure-root-path /data/measure
+    ports:
+      - "127.0.0.1:17913:17913"
+    volumes:
+      - banyandb-stream-data:/data/stream
+      - banyandb-measure-data:/data/measure
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -nz 127.0.0.1 17912"]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+    networks: [refine]
+
+  skywalking-oap:
+    image: apache/skywalking-oap-server:10.4.0
+    environment:
+      SW_HEALTH_CHECKER: default
+      SW_STORAGE: banyandb
+      SW_STORAGE_BANYANDB_TARGETS: banyandb:17912
+      JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:11800:11800"
+      - "127.0.0.1:12800:12800"
+    depends_on:
+      banyandb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/12800"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [refine]
+
+  skywalking-ui:
+    image: apache/skywalking-ui:10.4.0
+    environment:
+      SW_OAP_ADDRESS: http://skywalking-oap:12800
+    ports:
+      - "127.0.0.1:8088:8080"
+    depends_on:
+      skywalking-oap:
+        condition: service_healthy
+    networks: [refine]
+
+networks:
+  refine:
+    name: refine-network
+
+volumes:
+  mysql-primary-data:
+  mysql-replica-data:
+  rabbitmq-data:
+  identity-redis-data:
+  ai-redis-data:
+  pgvector-data:
+  banyandb-stream-data:
+  banyandb-measure-data:
