@@ -61,6 +61,8 @@ Flyway 演示账号为 `demo@refine.local` / `RefineDemo123`，只用于本地�
 
 详细设计见 [架构说明](docs/ARCHITECTURE.md) 和 [运行手册](docs/OPERATIONS.md)。
 
+用于答辩、录屏和面试的完整操作流程、讲解词与追问要点见 [项目演示与面试讲解指南](docs/DEMO_GUIDE.md)。
+
 ## 回退
 
 停止新版 Compose 后重新启动旧 `refine-app:8091`。新版使用独立端口、目录和数据库，不需要回滚旧单体文件。
