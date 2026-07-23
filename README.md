@@ -61,7 +61,7 @@ Flyway 演示账号为 `demo@refine.local` / `RefineDemo123`，只用于本地�
 
 详细设计见 [架构说明](docs/ARCHITECTURE.md) 和 [运行手册](docs/OPERATIONS.md)。
 
-用于答辩、录屏和面试的完整操作流程、讲解词与追问要点见 [项目演示与面试讲解指南](docs/DEMO_GUIDE.md)。
+本地联调、技术设计和验证命令见 [项目技术说明与验证指南](docs/DEMO_GUIDE.md)。
 
 ## 回退
 
