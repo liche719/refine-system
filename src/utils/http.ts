@@ -2,7 +2,6 @@ import axios, {
   AxiosInstance,
   AxiosRequestConfig,
   AxiosResponse,
-  AxiosError,
   InternalAxiosRequestConfig,
 } from 'axios';
 import {
@@ -11,44 +10,44 @@ import {
   cancelRequest,
   cancelAllRequest,
 } from './requestQueue';
+import { authStorage } from './auth';
 
 const REFRESH_URL = '/api/userAccount/refreshToken';
+const API_BASE_URL = import.meta.env.VITE_BASE_URL || '';
 let isRefreshing = false;
-let requestsQueue: Array<(token: string) => void> = [];
+
+type RetryConfig = InternalAxiosRequestConfig & { _authRetry?: boolean };
+type QueuedRequest = {
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+};
+
+let requestsQueue: QueuedRequest[] = [];
 
 const axiosInstance: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_BASE_URL || '',
+  baseURL: API_BASE_URL,
   timeout: 8000,
 });
 
-const getRefreshToken = async (): Promise<string | null> => {
+export const refreshAccessToken = async (): Promise<string | null> => {
   try {
-    const refreshToken = localStorage.getItem('refresh-token');
-
+    const refreshToken = authStorage.refreshToken();
     if (!refreshToken) return null;
 
     const { data } = await axios.post(
-      `${import.meta.env.VITE_BASE_URL}${REFRESH_URL}`,
+      `${API_BASE_URL}${REFRESH_URL}`,
       {},
-      {
-        headers: {
-          'refresh-token': refreshToken,
-        },
-      },
+      { headers: { 'refresh-token': refreshToken } },
     );
 
     if (data.code === 200 && data.data) {
       const { newAccessToken, newRefreshToken } = data.data;
-
-      localStorage.setItem('access-token', newAccessToken);
-      if (newRefreshToken) {
-        localStorage.setItem('refresh-token', newRefreshToken);
-      }
+      authStorage.saveTokens(newAccessToken, newRefreshToken);
       return newAccessToken;
     }
     return null;
   } catch (error) {
-    console.error('刷新Token失败', error);
+    console.error('刷新 Token 失败', error);
     return null;
   }
 };
@@ -58,16 +57,13 @@ axiosInstance.interceptors.request.use(
     removeRequest(config);
     addRequest(config);
 
-    const token = localStorage.getItem('access-token');
-
+    const token = authStorage.accessToken();
     if (token && config.url !== REFRESH_URL && config.headers) {
       config.headers['access-token'] = token;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error),
 );
 
 axiosInstance.interceptors.response.use(
@@ -76,62 +72,62 @@ axiosInstance.interceptors.response.use(
     return response.data;
   },
   async (error) => {
-    console.log('捕获到错误 status:', error.response?.status);
-
-    const config = error.config as InternalAxiosRequestConfig;
-
+    const config = error.config as RetryConfig | undefined;
     if (config) removeRequest(config);
 
-    // 这里用 401
     if (
-      error.response?.status === 401 &&
-      config &&
-      config.url !== REFRESH_URL
+      error.response?.status !== 401 ||
+      !config ||
+      config.url === REFRESH_URL
     ) {
-      if (isRefreshing) {
-        console.log('Token 刷新中，等待重试');
-        return new Promise((resolve) => {
-          requestsQueue.push((newToken) => {
-            if (config.headers) config.headers['access-token'] = newToken;
-            resolve(axiosInstance(config));
-          });
-        });
-      }
-
-      isRefreshing = true;
-
-      try {
-        const newToken = await getRefreshToken();
-
-        if (newToken) {
-          requestsQueue.forEach((cb) => cb(newToken));
-          requestsQueue = [];
-
-          if (config.headers) {
-            config.headers['access-token'] = newToken;
-          }
-          return axiosInstance(config);
-        } else {
-          throw new Error('刷新失败');
-        }
-      } catch (e) {
-        requestsQueue = [];
-        localStorage.clear();
-        window.location.href = '/login';
-        return Promise.reject(e);
-      } finally {
-        isRefreshing = false;
-      }
+      return Promise.reject(error);
     }
 
-    return Promise.reject(error);
+    // A token issued by refresh was rejected too. Stop here instead of looping.
+    if (config._authRetry) {
+      authStorage.clear();
+      window.location.replace('/login');
+      return Promise.reject(error);
+    }
+
+    config._authRetry = true;
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        requestsQueue.push({
+          resolve: (newToken) => {
+            if (config.headers) config.headers['access-token'] = newToken;
+            resolve(axiosInstance(config));
+          },
+          reject,
+        });
+      });
+    }
+
+    isRefreshing = true;
+    try {
+      const newToken = await refreshAccessToken();
+      if (!newToken) throw new Error('刷新 Token 失败');
+
+      requestsQueue.forEach((request) => request.resolve(newToken));
+      requestsQueue = [];
+      if (config.headers) config.headers['access-token'] = newToken;
+      return axiosInstance(config);
+    } catch (refreshError) {
+      requestsQueue.forEach((request) => request.reject(refreshError));
+      requestsQueue = [];
+      authStorage.clear();
+      window.location.replace('/login');
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
   },
 );
 
 export const service = {
-  request: <T = unknown>(config: AxiosRequestConfig): Promise<T> => {
-    return axiosInstance.request(config);
-  },
+  request: <T = unknown>(config: AxiosRequestConfig): Promise<T> =>
+    axiosInstance.request(config),
   cancelRequest,
   cancelAllRequest,
 };

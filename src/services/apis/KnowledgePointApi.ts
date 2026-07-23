@@ -5,7 +5,6 @@ const API_VERSION = 'v1';
 export interface KnowledgePointNode {
   id: number;
   keyPoints: string;
-  hasChildren?: boolean;
 }
 
 export interface KnowledgeTooltip {
@@ -16,7 +15,7 @@ export interface KnowledgeTooltip {
 
 export interface QuestionItem {
   id: number;
-  content: string;
+  question: string;
 }
 
 export interface RelatedData {
@@ -27,20 +26,8 @@ export interface RelatedData {
 export interface AddSonPointParams {
   pointName: string;
   pointDesc?: string;
+  subject: string;
   sonPoints?: AddSonPointParams[];
-}
-
-export interface KnowledgeDefinition {
-  content?: string;
-  isMastered?: boolean;
-  [key: string]: unknown;
-}
-
-export interface KnowledgeStatistic {
-  totalCount?: number;
-  wrongCount?: number;
-  solvedCount?: number;
-  [key: string]: number | undefined;
 }
 
 //  1. 获取根知识点
@@ -64,7 +51,7 @@ export const fetchChildPoints = (knowledgeId: number) => {
 // 3. 获取定义
 
 export const fetchDefinition = (knowledgeId: number) => {
-  return request.get<KnowledgeDefinition>({
+  return request.get<string>({
     url: `/api/${API_VERSION}/keypoints_explanation/${knowledgeId}`,
   });
 };
@@ -72,7 +59,7 @@ export const fetchDefinition = (knowledgeId: number) => {
 //  4. 获取统计数据
 
 export const fetchStatistic = (knowledgeId: number) => {
-  return request.get<KnowledgeStatistic>({
+  return request.get<string>({
     url: `/api/${API_VERSION}/keypoints_explanation/${knowledgeId}/related-questions-statistic`,
   });
 };

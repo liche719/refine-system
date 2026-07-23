@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { solveStream } from '@/services/apis/aiapi';
+import {
+  deleteConversation,
+  sendMessage,
+  solveWithContext,
+} from '@/services/apis/aiapi';
 
 export interface Message {
   id: string;
@@ -12,18 +16,56 @@ const generateId = () => {
   return Date.now().toString() + Math.random().toString(36).slice(2, 9);
 };
 
-export const useAiExplain = () => {
+const conversationStorageKey = (scope: string) =>
+  `refine.ai.conversation.${scope}`;
+
+const createConversationId = () =>
+  globalThis.crypto?.randomUUID?.() || generateId();
+
+const loadConversationId = (scope: string) => {
+  const key = conversationStorageKey(scope);
+  const existing = localStorage.getItem(key);
+  if (existing) return existing;
+  const created = createConversationId();
+  localStorage.setItem(key, created);
+  return created;
+};
+
+export interface QuestionContext {
+  questionId: string;
+  questionText: string;
+}
+
+export const useAiExplain = (
+  scope = 'ai-explain',
+  questionContext?: QuestionContext,
+) => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState(() =>
+    loadConversationId(scope),
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  useEffect(() => {
+    setConversationId(loadConversationId(scope));
+    setMessages([]);
+    setInput('');
+  }, [scope]);
+
   // 消息列表更新时自动滚动
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 0 && scrollRef.current) {
+      const scrollContainer = scrollRef.current.closest<HTMLElement>(
+        '[data-radix-scroll-area-viewport], .overflow-y-auto',
+      );
+      scrollContainer?.scrollTo({
+        top: scrollContainer.scrollHeight,
+        behavior: 'smooth',
+      });
     }
   }, [messages, isLoading]);
 
@@ -72,43 +114,48 @@ export const useAiExplain = () => {
       { id: aiMsgId, role: 'ai', content: '', isStreaming: true },
     ]);
 
-    abortControllerRef.current = new AbortController();
-
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
     try {
-      await solveStream({
-        question: userText,
-        onMessage: (chunk) => {
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.id === aiMsgId) {
-                return { ...msg, content: msg.content + chunk };
-              }
-              return msg;
-            }),
-          );
-        },
-        onError: (err) => {
-          console.error('Stream Error:', err);
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.id === aiMsgId && msg.role === 'ai') {
-                return {
+      const onMessage = (chunk: string) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMsgId ? { ...msg, content: msg.content + chunk } : msg,
+          ),
+        );
+      };
+      if (questionContext) {
+        await solveWithContext({
+          questionId: questionContext.questionId,
+          questionContent: questionContext.questionText,
+          userQuestion: userText,
+          onMessage,
+          signal: controller.signal,
+        });
+      } else {
+        await sendMessage({
+          conversationId,
+          message: userText,
+          onMessage,
+          signal: controller.signal,
+        });
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        console.error('Stream Error:', error);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMsgId
+              ? {
                   ...msg,
-                  content: msg.content + '\n[网络请求中断或出错，请重试]',
+                  content: `${msg.content}\n\n> 网络请求中断或出错，请重试。`,
                   isStreaming: false,
-                };
-              }
-              return msg;
-            }),
-          );
-        },
-        signal: controller.signal,
-      });
-    } catch (e) {
-      console.error('Unknown error:', e);
+                }
+              : msg,
+          ),
+        );
+      }
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
@@ -122,10 +169,16 @@ export const useAiExplain = () => {
   };
 
   const handleClear = () => {
-    if (messages.length === 0) return;
+    handleStop();
+    const previousConversationId = conversationId;
+    const nextConversationId = createConversationId();
+    localStorage.setItem(conversationStorageKey(scope), nextConversationId);
+    setConversationId(nextConversationId);
     setMessages([]);
     setInput('');
-    handleStop();
+    void deleteConversation(previousConversationId).catch((error) =>
+      console.error('Conversation cleanup failed:', error),
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

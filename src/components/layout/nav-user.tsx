@@ -1,10 +1,9 @@
-import { ChevronsUpDown, LogOut, Sparkles } from 'lucide-react';
+import { ChevronsUpDown, LogOut } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -20,6 +19,8 @@ import { Logout } from '../../services/user/user';
 import { useNavigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { userAtom } from '../../atoms/user';
+import { authStorage } from '@/utils/auth';
+import { toast } from 'sonner';
 
 export function NavUser({
   user,
@@ -73,32 +74,26 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem className="cursor-pointer">
-                <Sparkles />
-                Upgrade to Pro
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
             <DropdownMenuItem
               className="cursor-pointer transition-all duration-200"
               onClick={() => {
-                Logout().then(() => {
-                  setUser({
-                    userId: '',
-                    userName: '',
-                    userAccount: '',
-                    avatar: '',
+                Logout()
+                  .catch(() => undefined)
+                  .finally(() => {
+                    setUser({
+                      userId: '',
+                      userName: '',
+                      userAccount: '',
+                      avatar: '',
+                    });
+                    authStorage.clear();
+                    toast.success('已退出登录');
+                    navigate('/login', { replace: true });
                   });
-                  localStorage.removeItem('access-token');
-                  localStorage.removeItem('refresh-token');
-                  localStorage.removeItem('user');
-                  navigate('/login');
-                });
               }}
             >
               <LogOut />
-              Log out
+              退出登录
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

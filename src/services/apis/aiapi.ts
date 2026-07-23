@@ -1,135 +1,68 @@
 import request from '@/utils/request';
+import { consumeSse } from '@/utils/sse';
 
-const API_VERSION = 'v1';
-const BASE_URL = import.meta.env.VITE_BASE_URL || '';
-
-export interface StreamResponse {
-  content?: string;
-  text?: string;
-  done?: boolean;
-  [key: string]: any;
-}
+const API_VERSION = import.meta.env.VITE_API_VERSION || 'v1';
 
 export interface SolveStreamOptions {
   question: string;
   onMessage: (text: string) => void;
-  onError: (err: any) => void;
+  onError: (error: unknown) => void;
   signal?: AbortSignal;
 }
 
-/**
- * 1. AI流式解题接口
- * 原生fetch AccessToken 过期，它会直接失败。
- */
-export const solveStream = async ({
-  question,
-  onMessage,
-  onError,
-  signal,
-}: SolveStreamOptions) => {
-  const token = localStorage.getItem('access-token');
-
+export async function solveStream(options: SolveStreamOptions) {
   try {
-    const endpoint = `${BASE_URL}/api/${API_VERSION}/solve/stream`;
-
-    console.log('正在请求 AI 流式接口:', endpoint);
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'access-token': token || '',
-      },
-      body: JSON.stringify({ question }),
-      signal,
+    await consumeSse({
+      url: `/api/${API_VERSION}/solve/stream`,
+      body: { questionContext: options.question },
+      signal: options.signal,
+      onMessage: options.onMessage,
     });
-
-    if (!response.ok) {
-      // 如果是 401，这里其实无法触发无感刷新，因为没走 axios
-      const errorText = await response.text();
-      throw new Error(
-        `HTTP error! status: ${response.status}, msg: ${errorText}`,
-      );
-    }
-
-    if (!response.body) throw new Error('Response body is empty');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
-
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-
-        const dataStr = trimmed.slice(5).trim();
-
-        if (dataStr === '[DONE]') return;
-
-        try {
-          const data: StreamResponse = JSON.parse(dataStr);
-          const content = data.content || data.text || '';
-          if (content) onMessage(content);
-        } catch (_e) {
-          //JSON / 普通文本
-          console.warn('Non-JSON SSE data:', dataStr);
-          onMessage(dataStr);
-        }
-      }
-    }
-  } catch (error: any) {
-    if (error.name !== 'AbortError') {
-      onError(error);
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === 'AbortError')) {
+      options.onError(error);
     }
   }
-};
+}
 
-/**
- * 2. 发送消息并获取AI回复
- */
-export const sendMessage = (data: {
+export function sendMessage(data: {
   conversationId: string;
   message: string;
-}) => {
-  return request.post<any>({
+  onMessage: (value: string) => void;
+  signal?: AbortSignal;
+}) {
+  return consumeSse({
     url: `/api/${API_VERSION}/conversation/send-message`,
-    data,
+    body: { conversationId: data.conversationId, message: data.message },
+    onMessage: data.onMessage,
+    signal: data.signal,
   });
-};
+}
 
-/**
- * 3. 基于错题ID的AI对话
- */
-export const solveWithContext = (data: {
+export function solveWithContext(data: {
   questionId: string | number;
   userQuestion: string;
   questionContent?: string;
-}) => {
-  return request.post<any>({
+  onMessage: (value: string) => void;
+  signal?: AbortSignal;
+}) {
+  return consumeSse({
     url: `/api/${API_VERSION}/conversation/solve-with-context`,
-    data,
+    body: {
+      questionId: String(data.questionId),
+      userQuestion: data.userQuestion,
+      questionContent: data.questionContent,
+    },
+    onMessage: data.onMessage,
+    signal: data.signal,
   });
-};
+}
 
-/**
- * 4. 删除会话
- */
-export const deleteConversation = (conversationId: string) => {
+export function deleteConversation(conversationId: string) {
   return request.delete<void>({
-    url: `/api/${API_VERSION}/conversation/delete/`,
-    params: { conversationId },
+    url: `/api/${API_VERSION}/conversation/delete/${encodeURIComponent(conversationId)}`,
   });
-};
+}
 
 export default {
   solveStream,

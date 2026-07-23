@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import { Signup, SendCode } from '../../services/user/user';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { errorMessage } from '@/utils/api';
 
 export function SignupForm({
   className,
@@ -27,6 +28,7 @@ export function SignupForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [countdown, setCountdown] = useState(0);
   const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleSendCode = async () => {
@@ -41,9 +43,10 @@ export function SignupForm({
     }
 
     setIsSendingCode(true);
-    SendCode(formData.userAccount);
-    setTimeout(() => {
-      setIsSendingCode(false);
+    try {
+      const response = await SendCode(formData.userAccount);
+      if (response.code !== 200) throw new Error(response.info);
+      toast.success('验证码已发送');
       setCountdown(60);
       const timer = setInterval(() => {
         setCountdown((prev) => {
@@ -54,7 +57,11 @@ export function SignupForm({
           return prev - 1;
         });
       }, 1000);
-    }, 1000);
+    } catch (error) {
+      toast.error(errorMessage(error, '验证码发送失败'));
+    } finally {
+      setIsSendingCode(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,9 +92,9 @@ export function SignupForm({
       newErrors.checkCode = '验证码应为6位数字';
     }
     if (!formData.userPassword) {
-      newErrors.password = '请输入密码';
+      newErrors.userPassword = '请输入密码';
     } else if (formData.userPassword.length < 8) {
-      newErrors.password = '密码长度至少为8个字符';
+      newErrors.userPassword = '密码长度至少为8个字符';
     }
     if (!formData.confirmPassword) {
       newErrors.confirmPassword = '请确认密码';
@@ -99,17 +106,24 @@ export function SignupForm({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      Signup(formData).then((res) => {
-        if (res.code === 200) {
-          toast.success('注册成功');
-          navigate('/login');
-        } else {
-          toast.error(res.info);
-        }
+    if (!validateForm()) return;
+    setIsSubmitting(true);
+    try {
+      const response = await Signup({
+        userName: formData.userName,
+        userAccount: formData.userAccount,
+        userPassword: formData.userPassword,
+        checkCode: formData.checkCode,
       });
+      if (response.code !== 200) throw new Error(response.info);
+      toast.success('注册成功，请登录');
+      navigate('/login', { replace: true });
+    } catch (error) {
+      toast.error(errorMessage(error, '注册失败'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -127,18 +141,18 @@ export function SignupForm({
           </p>
         </div>
         <Field>
-          <FieldLabel htmlFor="userAccount">用户名</FieldLabel>
+          <FieldLabel htmlFor="userName">用户名</FieldLabel>
           <Input
-            id="name"
+            id="userName"
             type="text"
             placeholder="请输入用户名"
             value={formData.userName}
             onChange={handleChange}
-            className={errors.name ? 'border-red-500' : ''}
+            className={errors.userName ? 'border-red-500' : ''}
           />
-          {errors.name && (
+          {errors.userName && (
             <FieldDescription className="text-red-500 text-xs">
-              {errors.name}
+              {errors.userName}
             </FieldDescription>
           )}
         </Field>
@@ -150,11 +164,11 @@ export function SignupForm({
             placeholder="请输入邮箱地址"
             value={formData.userAccount}
             onChange={handleChange}
-            className={errors.email ? 'border-red-500' : ''}
+            className={errors.userAccount ? 'border-red-500' : ''}
           />
-          {errors.email && (
+          {errors.userAccount && (
             <FieldDescription className="text-red-500 text-xs">
-              {errors.email}
+              {errors.userAccount}
             </FieldDescription>
           )}
         </Field>
@@ -198,11 +212,11 @@ export function SignupForm({
             placeholder="请输入密码"
             value={formData.userPassword}
             onChange={handleChange}
-            className={errors.password ? 'border-red-500' : ''}
+            className={errors.userPassword ? 'border-red-500' : ''}
           />
-          {errors.password ? (
+          {errors.userPassword ? (
             <FieldDescription className="text-red-500 text-xs">
-              {errors.password}
+              {errors.userPassword}
             </FieldDescription>
           ) : (
             <FieldDescription>密码长度至少为8个字符</FieldDescription>
@@ -224,8 +238,12 @@ export function SignupForm({
           )}
         </Field>
         <Field>
-          <Button type="submit" className="w-full cursor-pointer">
-            创建账户
+          <Button
+            type="submit"
+            className="w-full cursor-pointer"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? '创建中...' : '创建账户'}
           </Button>
         </Field>
         <Field>

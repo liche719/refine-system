@@ -1,6 +1,12 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from 'react-router-dom';
 
-import MainLayout from '@/components/layout/MainLayout';
 import MainPage from '@/pages/Main';
 import HomePage from '@/features/Home/Home';
 import AiExplainPage from '@/pages/AiExplainPage/AiExplainPage';
@@ -14,28 +20,44 @@ import SignupPage from '@/auth/Signup/Signup';
 import LoginPage from '@/auth/Login/Login';
 import NotFound from '@/components/common/NotFound';
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    const scrollToTop = () => window.scrollTo(0, 0);
+    scrollToTop();
+    const frameId = window.requestAnimationFrame(scrollToTop);
+    const timeoutId = window.setTimeout(scrollToTop, 250);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [pathname]);
+
+  return null;
+}
+
 function Router() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         {/* 认证路由 */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        {/* 主应用路由 */}
-        <Route path="/" element={<MainLayout />}>
-          <Route path="" element={<Navigate to="/home" />} />
-          <Route path="" element={<MainPage />}>
-            <Route path="home" element={<HomePage />} />
-            <Route path="upload-question">
-              <Route path="" element={<UploadQuestionPage />} />
-              <Route path="question-detail" element={<QuestionDetailPage />} />
-            </Route>
-            <Route path="my-question" element={<MyQuestionPage />} />
-            <Route path="knowledge-base" element={<KnowledgePointPage />} />
-            <Route path="ai-explain" element={<AiExplainPage />} />
-            {/* <Route path="practice" element={<PracticePage />} /> */}
-          </Route>
+        <Route element={<MainPage />}>
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/upload-question" element={<UploadQuestionPage />} />
+          <Route
+            path="/upload-question/question-detail"
+            element={<QuestionDetailPage />}
+          />
+          <Route path="/my-question" element={<MyQuestionPage />} />
+          <Route path="/knowledge-base" element={<KnowledgePointPage />} />
+          <Route path="/ai-explain" element={<AiExplainPage />} />
         </Route>
         {/* 根级404路由 - 匹配所有其他未定义的路径 */}
         <Route path="*" element={<NotFound />} />

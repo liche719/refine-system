@@ -1,494 +1,360 @@
-import axios from 'axios';
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Search, ChevronDown, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ArrowRight,
+  BookOpenCheck,
+  CheckSquare2,
+  Search,
+  Trash2,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from '@/components/ui/input-group';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import EmptyState from '@/components/common/EmptyState';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { ChartLineMultiple } from '@/components/layout/ChartLineMultiple';
 import { ChartPieDonut } from '@/components/layout/ChartPieDonut';
 import { ChartPieSimple } from '@/components/layout/ChartPieSimple';
-import { ChartLineMultiple } from '@/components/layout/ChartLineMultiple';
 import {
-  getQuestionList,
   deleteQuestion,
+  getQuestionList,
   getStatistics,
 } from '@/services/myQuestion/myQuestion';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from '@/components/ui/pagination';
-import { AnalysisData, QuestionItem } from '@/services/myQuestion/type';
+import type { AnalysisData, QuestionItem } from '@/services/myQuestion/type';
+import { errorMessage } from '@/utils/api';
 
-interface Filters {
-  keyword: string;
-  subjects: string[];
-  errorType: string;
-  timeRange: string;
-  page: number;
-  size: number;
-}
+const EMPTY_STATS: AnalysisData = {
+  subjectDistribution: [],
+  knowledgeDistribution: [],
+  reviewTrend: [],
+};
 
-interface QuestionBackendItem {
-  id: number;
-  question_content: string;
-  subject: string;
-  update_time: string;
-  is_careless: number;
-  is_unfamiliar: number;
-  is_calculate_err: number;
-  is_time_shortage: number;
-  other_reason: string;
-  knowledge_desc: string | null;
-  errorReason: string;
+function reasonLabel(item: QuestionItem) {
+  const reasons = [
+    item.isCareless === 1 && '粗心马虎',
+    item.isUnfamiliar === 1 && '知识点不熟悉',
+    item.isCalculateErr === 1 && '计算错误',
+    item.isTimeShortage === 1 && '时间不够',
+    item.otherReasonFlag === 1 && (item.otherReason || '其他'),
+  ].filter(Boolean);
+  return reasons.length ? reasons.join('、') : '待归因';
 }
 
 export default function MyQuestionPage() {
-  const [subjectOpen, setSubjectOpen] = useState(false);
-  const [timeOpen, setTimeOpen] = useState(false);
-  const [errorOpen, setErrorOpen] = useState(false);
-  const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
-  const [showCheckbox, setShowCheckbox] = useState(false);
-  const [questionData, setQuestionData] = useState<QuestionBackendItem[]>([]);
-  const [searchParams, setSearchParams] = useSearchParams({
-    page: '1' as string,
-  });
-  const [filters, setFilters] = useState<Filters>({
-    keyword: '',
-    subjects: [],
-    errorType: '',
-    timeRange: 'THIS_WEEK',
-    page: 1,
-    size: 6,
-  });
-  const [statistics, setStatistics] = useState<AnalysisData>({
-    subjectDistribution: [],
-    knowledgeDistribution: [],
-    reviewTrend: [],
-  });
+  const navigate = useNavigate();
+  const [keyword, setKeyword] = useState('');
+  const [subject, setSubject] = useState('ALL');
+  const [errorType, setErrorType] = useState('ALL');
+  const [timeRange, setTimeRange] = useState('THIS_MONTH');
+  const [page, setPage] = useState(0);
+  const [items, setItems] = useState<QuestionItem[]>([]);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [statistics, setStatistics] = useState(EMPTY_STATS);
+  const [loading, setLoading] = useState(true);
 
-  const onClickShowCheckbox = () => {
-    const checkboxs = document.querySelectorAll('.checkbox');
-    if (showCheckbox) {
-      checkboxs.forEach((checkbox) => {
-        (checkbox as HTMLElement).style.opacity = '1';
-      });
-    } else {
-      checkboxs.forEach((checkbox) => {
-        (checkbox as HTMLElement).style.opacity = '0';
-      });
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [result, stats] = await Promise.all([
+        getQuestionList({
+          keyword: keyword.trim() || undefined,
+          subject: subject === 'ALL' ? undefined : subject,
+          errorType: errorType === 'ALL' ? undefined : errorType,
+          timeRange,
+          page,
+          size: 8,
+        }),
+        getStatistics(),
+      ]);
+      setItems(result.content);
+      setTotalPages(result.totalPages);
+      setTotalElements(result.totalElements);
+      setStatistics(stats);
+      setSelected([]);
+    } catch (error) {
+      toast.error(errorMessage(error, '错题加载失败'));
+    } finally {
+      setLoading(false);
     }
-    setShowCheckbox(!showCheckbox);
-  };
+  }, [errorType, keyword, page, subject, timeRange]);
 
-  const mapErrorReason = (item: QuestionItem) => {
-    if (item.is_careless === 1) {
-      return '粗心马虎';
-    } else if (item.is_unfamiliar === 1) {
-      return '知识点不熟悉';
-    } else if (item.is_calculate_err === 1) {
-      return '计算错误';
-    } else if (item.is_time_shortage === 1) {
-      return '时间不够';
-    } else {
-      return '其他';
+  useEffect(() => {
+    const timer = window.setTimeout(load, 250);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
+  const allSelected = useMemo(
+    () => items.length > 0 && items.every((item) => selected.includes(item.id)),
+    [items, selected],
+  );
+
+  const removeSelected = async () => {
+    if (!selected.length) return;
+    try {
+      await deleteQuestion(selected);
+      toast.success(`已删除 ${selected.length} 道错题`);
+      await load();
+    } catch (error) {
+      toast.error(errorMessage(error, '删除失败'));
     }
   };
 
-  const toggleSubjectValue = (value: string) => {
-    setFilters((prev: Filters) => {
-      const arr = prev.subjects;
-      const exists = arr.includes(value);
-
-      return {
-        ...prev,
-        subjects: exists ? arr.filter((v) => v !== value) : [...arr, value],
-        page: 1,
-      };
-    });
-  };
-
-  const setSingleFilterValue = (
-    key: 'errorType' | 'timeRange',
-    value: string,
-  ) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: prev[key] === value ? '' : value,
-      page: 1,
-    }));
-  };
-
-  // 初始化：从 URL 设置 filters
-  useEffect(() => {
-    const page = Number(searchParams.get('page')) || 1;
-    setFilters((prev) => ({ ...prev, page }));
-  }, []);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      const params = {
-        keyword: filters.keyword,
-        subject: filters.subjects[0] ?? '',
-        errorType: filters.errorType,
-        timeRange: filters.timeRange,
-        page: filters.page - 1,
-        size: filters.size,
-      };
-      console.log(params);
-
-      try {
-        const res = await getQuestionList(params);
-        console.log(res);
-        const content = res?.data?.content ?? [];
-        const mapped = content.map((item: QuestionItem) => ({
-          id: item.id,
-          subject: item.subject ?? '未分类',
-          update_time: item.update_time,
-          question_content: item.question_content,
-          is_careless: item.is_careless,
-          is_unfamiliar: item.is_unfamiliar,
-          is_calculate_err: item.is_calculate_err,
-          is_time_shortage: item.is_time_shortage,
-          other_reason: item.other_reason,
-          knowledge_desc: item.knowledge_desc,
-          errorReason: mapErrorReason(item),
-        }));
-
-        setQuestionData(mapped);
-
-        const stat = await getStatistics();
-        console.log(stat);
-        if (stat) setStatistics(stat.data);
-      } catch (e) {
-        if (axios.isCancel(e)) {
-          // 请求取消通常由快速切换筛选条件触发，这里静默处理以避免干扰
-          return;
-        }
-        console.error('fetch error', e);
-      }
-    };
-
-    fetchData();
-  }, [filters]);
-
-  useEffect(() => {
-    setSearchParams({ page: String(filters.page) });
-  }, [filters.page]);
-
-  const handlePageChange = (page: number) => {
-    setFilters((prev) => ({ ...prev, page }));
-  };
-
-  const handleNext = () => {
-    setFilters((prev) => ({ ...prev, page: prev.page + 1 }));
-  };
-
-  const handlePrevious = () => {
-    setFilters((prev) => ({ ...prev, page: prev.page - 1 }));
-  };
-
-  const handleDelete = () => {
-    deleteQuestion(selectedQuestions).then((res) => {
-      console.log(res);
-    });
+  const reviewQuestion = (item: QuestionItem) => {
+    navigate(
+      `/upload-question/question-detail?questionId=${encodeURIComponent(item.questionId)}&from=my-question`,
+      {
+        state: {
+          result: {
+            traceId: '',
+            code: 200,
+            info: 'loaded-from-mistake-library',
+            data: {
+              questionId: item.questionId,
+              questionText: item.questionContent,
+            },
+          },
+          returnTo: '/my-question',
+        },
+      },
+    );
   };
 
   return (
-    <div className="bg-background p-6 h-[93svh] overflow-hidden">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
-        <div className="lg:col-span-3 flex flex-col gap-4 border border-dotted rounded-lg p-4 overflow-y-auto">
-          {/* 搜索框 */}
-          <InputGroup className="h-12 ring-0 ring-offset-0 focus-within:ring-0 focus-within:ring-offset-0 focus-within:!ring-0 focus-within:!ring-offset-0 focus-within:!border-input">
-            <InputGroupInput
-              placeholder="搜索"
-              className="h-full"
-              onChange={(e) =>
-                setFilters({ ...filters, keyword: e.target.value })
-              }
-            />
-            <InputGroupAddon>
-              <Search className="size-5" />
-            </InputGroupAddon>
-          </InputGroup>
-
-          <Collapsible open={subjectOpen} onOpenChange={setSubjectOpen}>
-            <CollapsibleTrigger className="w-full">
-              <div className="w-full border-2 border-muted-foreground/25 rounded-md px-4 py-3 text-sm text-muted-foreground flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer">
-                <span>按照学科分配</span>
-                <ChevronDown
-                  className={`size-4 transition-transform duration-300 ${subjectOpen ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 space-y-2 px-2 ">
-              <div className="grid grid-cols-2 gap-6">
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.subjects.includes('数学') ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => toggleSubjectValue('数学')}
-                >
-                  数学
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.subjects.includes('物理') ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => toggleSubjectValue('物理')}
-                >
-                  物理
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.subjects.includes('化学') ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => toggleSubjectValue('化学')}
-                >
-                  化学
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.subjects.includes('英语') ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => toggleSubjectValue('英语')}
-                >
-                  英语
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          <Collapsible open={timeOpen} onOpenChange={setTimeOpen}>
-            <CollapsibleTrigger className="w-full">
-              <div className="w-full border-2 border-muted-foreground/25 rounded-md px-4 py-3 text-sm text-muted-foreground flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer">
-                <span>按照时间分配</span>
-                <ChevronDown
-                  className={`size-4 transition-transform ${timeOpen ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 space-y-2 px-2">
-              <div className="grid grid-cols-2 gap-6">
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.timeRange === 'THIS_WEEK' ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => setSingleFilterValue('timeRange', 'THIS_WEEK')}
-                >
-                  本周
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.timeRange === 'THIS_MONTH' ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() =>
-                    setSingleFilterValue('timeRange', 'THIS_MONTH')
-                  }
-                >
-                  本月
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.timeRange === 'THIS_QUARTER' ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() =>
-                    setSingleFilterValue('timeRange', 'THIS_QUARTER')
-                  }
-                >
-                  本季度
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.timeRange === 'THIS_YEAR' ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => setSingleFilterValue('timeRange', 'THIS_YEAR')}
-                >
-                  本年
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          <Collapsible open={errorOpen} onOpenChange={setErrorOpen}>
-            <CollapsibleTrigger className="w-full">
-              <div className="w-full border-2 border-muted-foreground/25 rounded-md px-4 py-3 text-sm text-muted-foreground flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer">
-                <span>按照错因分类</span>
-                <ChevronDown
-                  className={`size-4 transition-transform ${errorOpen ? 'rotate-180' : ''}`}
-                />
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 space-y-2 px-2">
-              <div className="grid grid-cols-2 gap-6">
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.errorType === '粗心马虎' ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => setSingleFilterValue('errorType', '粗心马虎')}
-                >
-                  粗心马虎
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.errorType === '知识点不熟悉' ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() =>
-                    setSingleFilterValue('errorType', '知识点不熟悉')
-                  }
-                >
-                  知识点不熟悉
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.errorType === '计算错误' ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => setSingleFilterValue('errorType', '计算错误')}
-                >
-                  计算错误
-                </div>
-                <div
-                  className={`text-sm text-muted-foreground cursor-pointer text-center border p-2 ${filters.errorType === '时间不够' ? 'bg-primary text-primary-foreground' : ''}`}
-                  onClick={() => setSingleFilterValue('errorType', '时间不够')}
-                >
-                  时间不够
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+    <main className="app-page">
+      <header className="page-heading">
+        <div>
+          <p className="page-kicker">MISTAKE LIBRARY</p>
+          <h1>我的错题</h1>
+          <p>筛选、复盘并整理已收录的题目。</p>
         </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <BookOpenCheck className="size-4" /> 共 {totalElements} 题
+        </div>
+      </header>
 
-        <div className="lg:col-span-6 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto mb-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {questionData.map((question: QuestionBackendItem) => (
-                <Card
-                  key={question.id}
-                  className="hover:shadow-md transition-shadow relative"
-                >
-                  <Checkbox
-                    className="absolute top-3 right-3 cursor-pointer checkbox transition-opacity duration-150 opacity-0"
-                    checked={selectedQuestions.includes(question.id)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedQuestions([
-                          ...selectedQuestions,
-                          question.id,
-                        ]);
-                      } else {
-                        setSelectedQuestions(
-                          selectedQuestions.filter((id) => id !== question.id),
-                        );
-                      }
-                    }}
-                  />
+      <section className="filter-bar" aria-label="错题筛选">
+        <div className="relative min-w-0 flex-1 sm:min-w-64">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={keyword}
+            onChange={(event) => {
+              setKeyword(event.target.value);
+              setPage(0);
+            }}
+            placeholder="搜索题目内容"
+            className="pl-9"
+          />
+        </div>
+        <FilterSelect
+          value={subject}
+          onChange={(value) => {
+            setSubject(value);
+            setPage(0);
+          }}
+          placeholder="学科"
+          items={[
+            'ALL:全部学科',
+            '数学:数学',
+            '物理:物理',
+            '化学:化学',
+            '英语:英语',
+          ]}
+        />
+        <FilterSelect
+          value={errorType}
+          onChange={(value) => {
+            setErrorType(value);
+            setPage(0);
+          }}
+          placeholder="错因"
+          items={[
+            'ALL:全部错因',
+            'careless:粗心马虎',
+            'unfamiliar:知识点不熟悉',
+            'calculationError:计算错误',
+            'timeShortage:时间不够',
+            'other:其他',
+          ]}
+        />
+        <FilterSelect
+          value={timeRange}
+          onChange={(value) => {
+            setTimeRange(value);
+            setPage(0);
+          }}
+          placeholder="时间"
+          items={[
+            'THIS_WEEK:本周',
+            'THIS_MONTH:本月',
+            'THIS_QUARTER:本季度',
+            'THIS_YEAR:本年',
+          ]}
+        />
+      </section>
 
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_310px]">
+        <section className="min-w-0">
+          <div className="mb-3 flex min-h-9 items-center justify-between gap-3">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={(checked) =>
+                  setSelected(checked ? items.map((item) => item.id) : [])
+                }
+              />
+              全选本页
+            </label>
+            {selected.length > 0 && (
+              <Button variant="destructive" size="sm" onClick={removeSelected}>
+                <Trash2 className="size-4" /> 删除 {selected.length} 题
+              </Button>
+            )}
+          </div>
+
+          {loading ? (
+            <LoadingSpinner text="正在读取错题" />
+          ) : items.length === 0 ? (
+            <EmptyState
+              icon={CheckSquare2}
+              title="没有匹配的错题"
+              description="调整筛选条件，或先上传一道题目。"
+            />
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {items.map((item) => (
+                <Card key={item.id} className="question-card">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <div className="w-full aspect-video bg-muted rounded-md mb-2 flex items-center justify-center cursor-pointer">
-                          <span className="text-muted-foreground text-sm overflow-hidden text-ellipsis whitespace-nowrap">
-                            {question.question_content}
-                          </span>
+                      <Checkbox
+                        aria-label={`选择题目 ${item.id}`}
+                        checked={selected.includes(item.id)}
+                        onCheckedChange={(checked) =>
+                          setSelected((current) =>
+                            checked
+                              ? [...current, item.id]
+                              : current.filter((id) => id !== item.id),
+                          )
+                        }
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-3 min-h-16 text-sm leading-6">
+                          {item.questionContent}
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {item.subject || '未分类'}
+                          </Badge>
+                          <Badge
+                            variant="secondary"
+                            className="max-w-full truncate"
+                          >
+                            {reasonLabel(item)}
+                          </Badge>
+                          <time className="ml-auto text-xs text-muted-foreground">
+                            {item.updateTime?.slice(0, 10)}
+                          </time>
                         </div>
-
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge>{question.subject}</Badge>
-                            <Badge variant="secondary">
-                              {question.errorReason}
-                            </Badge>
-                          </div>
-
-                          <span className="text-muted-foreground">
-                            {question.update_time}
-                          </span>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-3 w-full justify-between border border-border/70 px-3"
+                          onClick={() => reviewQuestion(item)}
+                        >
+                          查看解析与复盘
+                          <ArrowRight className="size-4" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
+          )}
+
+          <div className="mt-5 flex items-center justify-between">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0 || loading}
+              onClick={() => setPage((value) => value - 1)}
+            >
+              上一页
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              第 {totalPages ? page + 1 : 0} / {totalPages} 页
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page + 1 >= totalPages || loading}
+              onClick={() => setPage((value) => value + 1)}
+            >
+              下一页
+            </Button>
           </div>
+        </section>
 
-          <div className="border-t pt-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="cursor-pointer"
-                onClick={onClickShowCheckbox}
-              >
-                批量操作
-              </Button>
-              {selectedQuestions.length > 0 && (
-                <>
-                  <span className="text-sm text-muted-foreground">
-                    已选择 {selectedQuestions.length} 个文件
-                  </span>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="cursor-pointer"
-                    onClick={handleDelete}
-                  >
-                    <Trash2 className="size-4 mr-1" />
-                    批量删除
-                  </Button>
-                </>
-              )}
-            </div>
-
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={handlePrevious}
-                    className="cursor-pointer"
-                  />
-                </PaginationItem>
-                {new Array(3).fill(1).map((_, index) => (
-                  <PaginationItem key={index}>
-                    <PaginationLink
-                      className={` ${filters.page - 1 + index === filters.page ? 'bg-primary text-primary-foreground pointer-events-none' : 'cursor-pointer'} ${filters.page - 1 + index === 0 ? 'opacity-0 pointer-events-none' : ''}`}
-                      onClick={() => handlePageChange(filters.page - 1 + index)}
-                    >
-                      {filters.page - 1 + index}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
-                <PaginationItem>
-                  <PaginationEllipsis />
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={handleNext}
-                    className="cursor-pointer"
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        </div>
-
-        <div className="lg:col-span-3 flex flex-col gap-4 border border-dotted rounded-lg p-4 overflow-y-auto">
+        <aside className="analytics-panel">
+          <h2>学习分布</h2>
           <div>
-            <span className="text-lg font-semibold">错题数量总览</span>
-            <div className="flex items-center justify-center">
-              <ChartPieDonut data={statistics.subjectDistribution} />
-            </div>
+            <p>学科占比</p>
+            <ChartPieDonut data={statistics.subjectDistribution} />
           </div>
           <div>
-            <span className="text-lg font-semibold">知识点错误分布</span>
-            <div className="flex items-center justify-center">
-              <ChartPieSimple data={statistics.knowledgeDistribution} />
+            <p>知识点错误</p>
+            <ChartPieSimple data={statistics.knowledgeDistribution} />
+          </div>
+          <div>
+            <p>复习趋势</p>
+            <div className="h-48">
+              <ChartLineMultiple data={statistics.reviewTrend} />
             </div>
           </div>
-          <div className="flex flex-col gap-6">
-            <span className="text-lg font-semibold">复习完成率</span>
-            <div className="flex items-center justify-center">
-              <div className="w-full h-[200px]">
-                <ChartLineMultiple data={statistics.reviewTrend} />
-              </div>
-            </div>
-          </div>
-        </div>
+        </aside>
       </div>
-    </div>
+    </main>
+  );
+}
+
+function FilterSelect({
+  value,
+  onChange,
+  placeholder,
+  items,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  items: string[];
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-full sm:w-40">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => {
+          const [key, label] = item.split(':');
+          return (
+            <SelectItem key={key} value={key}>
+              {label}
+            </SelectItem>
+          );
+        })}
+      </SelectContent>
+    </Select>
   );
 }

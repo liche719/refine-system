@@ -1,50 +1,39 @@
 import request from '@/utils/request';
+import { consumeSse } from '@/utils/sse';
+import type { ApiResponse } from '@/utils/api';
 
 export interface GenerationData {
   questionId: string;
-  questionContent: string;
+  content: string;
 }
 
-export interface JudgeData {
-  isCorrect?: boolean;
-  result?: string;
-}
-
-/**
- * 1. AI 巩固出题
- * Method: POST
- */
-export const generateQuestion = (mistakeQuestionId: number) => {
-  return request.post<GenerationData>({
+export function generateQuestion(mistakeQuestionId: number) {
+  return request.post<ApiResponse<GenerationData>>({
     url: '/api/question/generation',
     params: { mistakeQuestionId },
+    timeout: 90000,
   });
-};
+}
 
-/**
- * 2. AI 判题
- * Method: POST
- */
-export const judgeQuestion = (questionId: string, answer: string) => {
-  return request.post<JudgeData>({
+export function judgeQuestion(
+  questionId: string,
+  answer: string,
+  onMessage: (value: string) => void,
+  signal?: AbortSignal,
+) {
+  return consumeSse({
     url: '/api/question/judge',
     params: { questionId, answer },
+    onMessage,
+    signal,
   });
-};
+}
 
-/**
- * 3. 录入错题库
- * Method: POST
- */
-export const recordQuestion = (questionId: string) => {
-  return request.post<void>({
+export function recordQuestion(questionId: string) {
+  return request.post<ApiResponse<string>>({
     url: '/api/question/record',
     params: { questionId },
   });
-};
+}
 
-export default {
-  generateQuestion,
-  judgeQuestion,
-  recordQuestion,
-};
+export default { generateQuestion, judgeQuestion, recordQuestion };

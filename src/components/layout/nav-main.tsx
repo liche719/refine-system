@@ -6,6 +6,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
+  useSidebar,
 } from '@/components/ui/sidebar';
 
 export function NavMain({
@@ -19,21 +20,29 @@ export function NavMain({
 }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  const handleNavigate = (url: string) => {
+    navigate(url);
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarGroupLabel>学习空间</SidebarGroupLabel>
       <SidebarMenu>
-        {items.map((item, index) => (
+        {items.map((item) => (
           <SidebarMenuButton
-            key={index}
+            key={item.url}
             tooltip={item.title}
             className={
-              pathname.includes(item.url)
+              pathname === item.url || pathname.startsWith(`${item.url}/`)
                 ? 'bg-primary transition-all duration-200 text-primary-foreground pointer-events-none'
                 : 'cursor-pointer transition-all duration-200'
             }
-            onClick={() => navigate(item.url)}
+            onClick={() => handleNavigate(item.url)}
           >
             {item.icon && <item.icon />}
             <span>{item.title}</span>

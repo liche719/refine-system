@@ -1,192 +1,161 @@
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import {
-  CloudUpload,
-  PencilLine,
-  Lightbulb,
-  Redo2,
-  BotMessageSquare,
-} from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+  BotMessageSquare,
+  CloudUpload,
+  FileCheck2,
+  FileText,
+  Lightbulb,
+  ScanText,
+  X,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
 import { extractFirst } from '@/services/ocr/uploadQuestion';
+import { errorMessage } from '@/utils/api';
+
+const MAX_SIZE = 10 * 1024 * 1024;
+const ACCEPTED = ['txt', 'docx', 'pdf', 'png', 'jpg', 'jpeg', 'webp'];
 
 export default function UploadQuestionPage() {
   const navigate = useNavigate();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  const handleFileUpload = async () => {
-    if (!selectedFile) {
-      alert('请选择文件！');
-      return;
-    }
+  const select = (file?: File) => {
+    if (!file) return;
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!ACCEPTED.includes(extension))
+      return toast.error('仅支持图片、PDF、DOCX 和 TXT 文件');
+    if (file.size > MAX_SIZE) return toast.error('文件不能超过 10 MB');
+    if (!file.size) return toast.error('文件内容为空');
+    setSelectedFile(file);
+  };
 
-    const ext = selectedFile.name.split('.').pop()?.toLowerCase();
-    let fileType = '';
-    if (ext === 'jpg' || ext === 'jpeg' || ext === 'png') fileType = 'png';
-    else if (ext === 'pdf') fileType = 'pdf';
-    else if (ext === 'doc' || ext === 'docx') fileType = 'word';
-    else {
-      alert('文件类型不支持！');
-      return;
-    }
-
+  const upload = async () => {
+    if (!selectedFile) return toast.info('请先选择文件');
+    setUploading(true);
     try {
-      const res = await extractFirst(selectedFile, fileType);
-      console.log(res);
-      if (res.code === 200) {
-        navigate('/upload-question/question-detail', {
-          state: { result: res },
-        });
-      }
-    } catch (err) {
-      toast.error('上传失败，请稍后重试');
-      console.error(err);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setSelectedFile(e.dataTransfer.files[0]);
+      const extension = selectedFile.name.split('.').pop()?.toLowerCase() || '';
+      const response = await extractFirst(selectedFile, extension);
+      if (response.code !== 200) throw new Error(response.info);
+      toast.success(
+        response.data.knowledgePoint
+          ? `题目已加入错题库，并关联「${response.data.knowledgePoint}」`
+          : '题目已加入错题库；暂未识别到可靠知识点',
+      );
+      navigate(
+        `/upload-question/question-detail?questionId=${encodeURIComponent(response.data.questionId)}`,
+        {
+          state: { result: response },
+        },
+      );
+    } catch (error) {
+      toast.error(errorMessage(error, '上传解析失败'));
+    } finally {
+      setUploading(false);
     }
   };
 
   return (
-    <div className="bg-background p-6 h-[93svh] overflow-hidden">
-      <div className="grid grid-cols-1 lg:grid-cols-12 h-full">
-        <div className="lg:col-span-7 gap-4 flex flex-col">
-          <h2 className="text-3xl font-semibold mb-0">智能错题</h2>
-          <p className="text-middle text-muted-foreground mb-0">
-            上传错题图片，系统将自动分析错题
-          </p>
+    <main className="app-page upload-page">
+      <header className="page-heading">
+        <div>
+          <p className="page-kicker">CAPTURE A MISTAKE</p>
+          <h1>上传错题</h1>
+          <p>支持图片、PDF、DOCX 与文本，单个文件最大 10 MB。</p>
+        </div>
+      </header>
 
-          <div className="flex-1 flex flex-col gap-4">
-            {/* 上传区域 */}
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => document.getElementById('file-upload')?.click()}
-              className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-lg cursor-pointer transition-all duration-200 ${
-                isDragging
-                  ? 'border-primary bg-primary/5'
-                  : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-accent/50'
-              }`}
-            >
-              <div className="flex flex-col items-center justify-center gap-3 p-8">
-                <CloudUpload
-                  className={`w-16 h-16 ${
-                    isDragging ? 'text-primary' : 'text-muted-foreground'
-                  }`}
-                />
-                <div className="text-center">
-                  <p className="text-lg font-medium">
-                    {selectedFile ? selectedFile.name : '点击或拖拽文件上传'}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    支持 jpg、word、pdf 格式
-                  </p>
-                </div>
-              </div>
-
-              {/* 隐藏 input */}
-              <Input
-                id="file-upload"
-                type="file"
-                className="hidden"
-                onChange={handleFileChange}
-                accept=".jpg,.jpeg,.png,.doc,.docx,.pdf"
-              />
-            </div>
-
-            <Button className="cursor-pointer" onClick={handleFileUpload}>
-              确认
+      <div className="upload-layout">
+        <section className="upload-workspace">
+          <button
+            type="button"
+            className={`drop-zone ${isDragging ? 'dragging' : ''} ${selectedFile ? 'selected' : ''}`}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setIsDragging(false);
+              select(event.dataTransfer.files[0]);
+            }}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              hidden
+              accept=".txt,.docx,.pdf,.png,.jpg,.jpeg,.webp"
+              onChange={(event) => select(event.target.files?.[0])}
+            />
+            {selectedFile ? (
+              <>
+                <FileCheck2 className="size-12" />
+                <strong>{selectedFile.name}</strong>
+                <span>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</span>
+              </>
+            ) : (
+              <>
+                <CloudUpload className="size-12" />
+                <strong>拖放文件，或点击选择</strong>
+                <span>PNG · JPG · WEBP · PDF · DOCX · TXT</span>
+              </>
+            )}
+          </button>
+          <div className="upload-actions">
+            {selectedFile && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setSelectedFile(null)}
+              >
+                <X className="size-4" /> 移除
+              </Button>
+            )}
+            <Button onClick={upload} disabled={!selectedFile || uploading}>
+              {uploading ? '正在识别...' : '开始识别'}
+              <ScanText className="size-4" />
             </Button>
           </div>
-        </div>
+        </section>
 
-        <div className="lg:col-span-5">
-          <div className="h-full bg-muted rounded-lg ml-4 border-2 border-muted-foreground/25 p-6">
-            <h2 className="text-xl font-semibold m-4 pb-3 border-b">
-              功能介绍
-            </h2>
-            <div className="space-y-3 px-3">
-              <Card className="shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex justify-center">
-                    <PencilLine className="size-6 text-primary mr-3" />
-                    <div className="text-lg font-medium mb-1">自动解析</div>
-                  </div>
-                  <div className="text-sm text-muted-foreground text-center">
-                    AI自动识别题目信息
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex justify-center">
-                    <Lightbulb className="size-6 text-primary mr-3" />
-                    <div className="text-lg font-medium mb-1">知识点链接</div>
-                  </div>
-                  <div className="text-sm text-muted-foreground text-center">
-                    智能匹配知识点和讲解
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex justify-center">
-                    <Redo2 className="size-6 text-primary mr-3" />
-                    <div className="text-lg font-medium mb-1">试题再练</div>
-                  </div>
-                  <div className="text-sm text-muted-foreground text-center">
-                    生成相似题以巩固知识点
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex justify-center">
-                    <BotMessageSquare className="size-6 text-primary mr-3" />
-                    <div className="text-lg font-medium mb-1">AI问答</div>
-                  </div>
-                  <div className="text-sm text-muted-foreground text-center">
-                    与AI实时问答解决问题
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
+        <aside className="upload-process">
+          <p className="page-kicker">WHAT HAPPENS NEXT</p>
+          <h2>从文件到可复习错题</h2>
+          {[
+            {
+              icon: FileText,
+              title: '提取题干',
+              text: '识别文件中的第一道题目。',
+            },
+            {
+              icon: Lightbulb,
+              title: '沉淀知识点',
+              text: '保存错题并关联学习上下文。',
+            },
+            {
+              icon: BotMessageSquare,
+              title: '生成解析',
+              text: '通过流式 AI 获得解题思路。',
+            },
+          ].map(({ icon: Icon, title, text }, index) => (
+            <article key={title}>
+              <span>{index + 1}</span>
+              <Icon className="size-5" />
+              <div>
+                <strong>{title}</strong>
+                <p>{text}</p>
+              </div>
+            </article>
+          ))}
+        </aside>
       </div>
-    </div>
+    </main>
   );
 }

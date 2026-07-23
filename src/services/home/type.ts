@@ -1,6 +1,26 @@
 export interface OverviewResponse {
   questionsNum: number;
-  reviewRate: string;
+  reviewRate: number;
   hardQuestions: number;
-  learningTime: string;
+  studyTime: number;
+}
+
+export interface StudyDynamic {
+  uploadCount: number;
+  recentReviewCount: number;
+}
+
+export interface OverdueData {
+  count: number;
+  description: string;
+}
+
+export interface TrickyKnowledge {
+  knowledgeId: number;
+  knowledgeName: string;
+}
+
+export interface KeyPointSuggestion {
+  knowledgePoint: string;
+  reviewReason: string;
 }

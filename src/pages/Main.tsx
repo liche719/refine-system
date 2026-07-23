@@ -1,33 +1,15 @@
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
-
-import MainLayout from '@/components/layout/MainLayout';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '@/components/layout/Sidebar';
+import { authStorage } from '@/utils/auth';
 
 export default function Main() {
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const token = localStorage.getItem('access-token');
-
-  // 未认证且不在登录页时重定向
-  useEffect(() => {
-    async function isLogin() {
-      if (
-        !token &&
-        !pathname.includes('/login') &&
-        !pathname.includes('/signup') &&
-        !pathname.includes('/forgot-password')
-      ) {
-        navigate('/login');
-      }
-    }
-    isLogin();
-  }, [pathname, navigate]);
+  const location = useLocation();
+  if (!authStorage.accessToken()) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
   return (
-    <>
-      <Sidebar>
-        <MainLayout />
-      </Sidebar>
-    </>
+    <Sidebar>
+      <Outlet />
+    </Sidebar>
   );
 }

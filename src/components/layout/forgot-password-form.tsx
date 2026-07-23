@@ -13,6 +13,7 @@ import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { ResetPassword } from '@/services/user/user';
 import { SendCode } from '@/services/user/user';
 import { toast } from 'sonner';
+import { errorMessage } from '@/utils/api';
 
 export function ForgotPasswordForm({
   className,
@@ -28,6 +29,7 @@ export function ForgotPasswordForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [countdown, setCountdown] = useState(0);
   const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSendCode = async () => {
     if (!formData.userAccount) {
@@ -41,10 +43,10 @@ export function ForgotPasswordForm({
     }
 
     setIsSendingCode(true);
-    SendCode(formData.userAccount).then((res) => {
+    try {
+      const res = await SendCode(formData.userAccount);
       if (res.code === 200) {
         toast.success('验证码发送成功');
-        setIsSendingCode(false);
         setCountdown(60);
 
         const timer = setInterval(() => {
@@ -58,9 +60,12 @@ export function ForgotPasswordForm({
         }, 1000);
       } else {
         toast.error(res.info);
-        setIsSendingCode(false);
       }
-    });
+    } catch (error) {
+      toast.error(errorMessage(error, '验证码发送失败'));
+    } finally {
+      setIsSendingCode(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,17 +122,23 @@ export function ForgotPasswordForm({
     }
   };
 
-  const handleResetSubmit = (e: React.FormEvent) => {
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateResetStep()) {
-      ResetPassword(formData).then((res) => {
-        if (res.code === 200) {
-          toast.success('密码重置成功');
-          setStep('success');
-        } else {
-          toast.error(res.info);
-        }
+    if (!validateResetStep()) return;
+    setIsSubmitting(true);
+    try {
+      const res = await ResetPassword({
+        userAccount: formData.userAccount,
+        checkCode: formData.checkCode,
+        newPassword: formData.newPassword,
       });
+      if (res.code !== 200) throw new Error(res.info);
+      toast.success('密码重置成功');
+      setStep('success');
+    } catch (error) {
+      toast.error(errorMessage(error, '密码重置失败'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -261,8 +272,12 @@ export function ForgotPasswordForm({
             )}
           </Field>
           <Field>
-            <Button type="submit" className="w-full cursor-pointer">
-              重置密码
+            <Button
+              type="submit"
+              className="w-full cursor-pointer"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? '提交中...' : '重置密码'}
             </Button>
           </Field>
           <Field>

@@ -4,25 +4,37 @@ import {
   QuestionListResponse,
   StatisticsResponse,
 } from './type';
+import type { ApiResponse } from '@/utils/api';
 
 export async function getQuestionList(params: QuestionListParams) {
-  const res = (await request.get)<QuestionListResponse>({
+  return request.get<QuestionListResponse>({
     url: '/api/v1/feedback/review/list',
     params,
   });
-  return res;
+}
+
+export function getQuestionDetail(questionId: string) {
+  return request.get<
+    ApiResponse<{
+      questionId: string;
+      questionText: string;
+      subject?: string | null;
+    }>
+  >({
+    url: '/api/v1/feedback/review/detail',
+    params: { questionId },
+  });
 }
 
 export function deleteQuestion(questionIds: number[]) {
   return request.delete({
     url: '/api/v1/feedback/review/deleteBatch',
-    params: { questionIds },
+    params: { questionIds: questionIds.join(',') },
   });
 }
 
 export async function getStatistics() {
-  const res = (await request.get)<StatisticsResponse>({
+  return request.get<StatisticsResponse>({
     url: '/api/v1/feedback/review/statistics',
   });
-  return res;
 }

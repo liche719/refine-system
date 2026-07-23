@@ -5,6 +5,7 @@ export interface ExtractFirstResponse {
   data: {
     questionText: string;
     questionId: string;
-    userId: string;
+    subject?: string | null;
+    knowledgePoint?: string | null;
   };
 }

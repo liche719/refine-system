@@ -9,15 +9,17 @@ export interface QuestionListParams {
 
 export interface QuestionItem {
   id: number;
-  question_content: string;
-  is_careless: number;
-  is_unfamiliar: number;
-  is_calculate_err: number;
-  is_time_shortage: number;
-  other_reason: string;
-  update_time: string;
+  questionId: string;
+  questionContent: string;
+  isCareless: number;
+  isUnfamiliar: number;
+  isCalculateErr: number;
+  isTimeShortage: number;
+  otherReasonFlag: number;
+  otherReason: string | null;
+  studyNote: string | null;
+  updateTime: string;
   subject: string;
-  knowledge_desc: string | null;
 }
 
 // 分页信息
@@ -31,24 +33,19 @@ export interface PageInfo {
 // data 部分
 export interface QuestionListData {
   content: QuestionItem[];
-  page: PageInfo;
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
 }
 
 // 最外层 API 响应
-export interface QuestionListResponse {
-  traceId: string;
-  code: number;
-  info: string;
-  data: QuestionListData;
-}
+export type QuestionListResponse = QuestionListData;
 
 // 主数据结构接口
-export interface StatisticsResponse {
-  traceId: string;
-  code: number;
-  info: string;
-  data: AnalysisData;
-}
+export type StatisticsResponse = AnalysisData;
 
 export interface AnalysisData {
   subjectDistribution: DistributionItem[];

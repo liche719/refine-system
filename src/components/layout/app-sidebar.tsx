@@ -1,5 +1,12 @@
 import * as React from 'react';
-import { BookOpen, House, Upload, List, BrainCog } from 'lucide-react';
+import {
+  BookOpen,
+  House,
+  Upload,
+  List,
+  BrainCog,
+  MessageCircleQuestion,
+} from 'lucide-react';
 
 import { NavMain } from '@/components/layout/nav-main';
 import { NavUser } from '@/components/layout/nav-user';
@@ -45,6 +52,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         url: '/knowledge-base',
         icon: List,
       },
+      {
+        title: 'AI 解题',
+        url: '/ai-explain',
+        icon: MessageCircleQuestion,
+      },
     ],
   };
 
@@ -53,7 +65,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenuButton>
           <BrainCog className="!size-6" />
-          <span className="text-2xl font-bold">智能错题系统</span>
+          <span className="text-lg font-bold">Refine 智能错题</span>
         </SidebarMenuButton>
       </SidebarHeader>
       <SidebarContent>

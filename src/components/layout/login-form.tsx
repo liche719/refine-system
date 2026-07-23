@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { Login } from '@/services/user/user';
 import { userAtom } from '@/atoms/user';
 import { useAtom } from 'jotai';
+import { authStorage } from '@/utils/auth';
+import { errorMessage } from '@/utils/api';
 
 export function LoginForm({
   className,
@@ -24,6 +26,7 @@ export function LoginForm({
     userPassword: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const [, setUser] = useAtom(userAtom);
 
@@ -35,25 +38,26 @@ export function LoginForm({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (validateForm()) {
-      Login(formData).then((res) => {
-        if (res.code === 200) {
-          toast.success('登录成功');
-          setUser({
-            userId: res.data.userId,
-            userName: res.data.userName,
-            userAccount: formData.userAccount,
-            avatar: '',
-          });
-          localStorage.setItem('access-token', res.data.accessToken);
-          localStorage.setItem('refresh-token', res.data.refreshToken);
-          navigate('/');
-        } else {
-          toast.error(res.info);
-        }
+    if (!validateForm()) return;
+    setIsSubmitting(true);
+    try {
+      const res = await Login(formData);
+      if (res.code !== 200) throw new Error(res.info);
+      setUser({
+        userId: res.data.userId,
+        userName: res.data.userName,
+        userAccount: formData.userAccount,
+        avatar: '',
       });
+      authStorage.saveTokens(res.data.accessToken, res.data.refreshToken);
+      toast.success('登录成功');
+      navigate('/home', { replace: true });
+    } catch (error) {
+      toast.error(errorMessage(error, '登录失败'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -97,11 +101,12 @@ export function LoginForm({
             placeholder="请输入邮箱地址"
             value={formData.userAccount}
             onChange={handleChange}
-            className={errors.email ? 'border-red-500' : ''}
+            autoComplete="email"
+            className={errors.userAccount ? 'border-red-500' : ''}
           />
-          {errors.email && (
+          {errors.userAccount && (
             <FieldDescription className="text-red-500 text-xs">
-              {errors.email}
+              {errors.userAccount}
             </FieldDescription>
           )}
         </Field>
@@ -119,6 +124,7 @@ export function LoginForm({
             id="userPassword"
             type="password"
             required
+            autoComplete="current-password"
             value={formData.userPassword}
             onChange={handleChange}
             className={errors.userPassword ? 'border-red-500' : ''}
@@ -130,8 +136,12 @@ export function LoginForm({
           )}
         </Field>
         <Field>
-          <Button type="submit" className="w-full cursor-pointer">
-            登录
+          <Button
+            type="submit"
+            className="w-full cursor-pointer"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? '登录中...' : '登录'}
           </Button>
         </Field>
         <Field>

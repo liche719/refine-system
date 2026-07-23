@@ -32,9 +32,12 @@ export function ChartLineMultiple({ data }: ChartLineMultipleProps) {
   const chartData = data || [];
 
   return (
-    <Card>
-      <CardContent>
-        <ChartContainer config={chartConfig}>
+    <Card className="h-full shadow-none">
+      <CardContent className="h-full p-4">
+        <ChartContainer
+          config={chartConfig}
+          className="h-full w-full aspect-auto"
+        >
           <LineChart
             accessibilityLayer
             data={chartData}

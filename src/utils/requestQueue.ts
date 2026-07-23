@@ -1,6 +1,9 @@
 import axios, { AxiosRequestConfig, Canceler } from 'axios';
 
-const pendingMap = new Map<string, Canceler>();
+type QueuedConfig = AxiosRequestConfig & { __requestQueueId?: string };
+type PendingRequest = { cancel: Canceler; requestId: string };
+
+const pendingMap = new Map<string, PendingRequest>();
 
 const getRequestKey = (config: AxiosRequestConfig) => {
   const { method, url, params, data } = config;
@@ -14,42 +17,41 @@ const getRequestKey = (config: AxiosRequestConfig) => {
 
 export const removeRequest = (config: AxiosRequestConfig) => {
   const key = getRequestKey(config);
-  if (pendingMap.has(key)) {
-    const cancel = pendingMap.get(key);
-    if (cancel) {
-      cancel(key);
-    }
+  const requestId = (config as QueuedConfig).__requestQueueId;
+  const pending = pendingMap.get(key);
+  if (pending && pending.requestId === requestId) {
     pendingMap.delete(key);
   }
 };
 
 export const addRequest = (config: AxiosRequestConfig) => {
-  removeRequest(config);
   const key = getRequestKey(config);
+  const existing = pendingMap.get(key);
+  if (existing) {
+    existing.cancel(`取消重复请求: ${config.url}`);
+    pendingMap.delete(key);
+  }
 
+  const requestId = crypto.randomUUID();
+  (config as QueuedConfig).__requestQueueId = requestId;
   config.cancelToken = new axios.CancelToken((cancel) => {
-    if (!pendingMap.has(key)) {
-      pendingMap.set(key, cancel);
-    }
+    pendingMap.set(key, { cancel, requestId });
   });
 };
+
 export const cancelRequest = (url: string | string[]) => {
   const urlList = Array.isArray(url) ? url : [url];
-
-  // 遍历 Map
-  for (const [key, cancel] of pendingMap) {
-    const isMatched = urlList.some((u) => key.includes(u));
-    if (isMatched) {
-      cancel(`取消请求: ${url}`);
+  for (const [key, pending] of pendingMap) {
+    if (urlList.some((item) => key.includes(item))) {
+      pending.cancel(`取消请求: ${url}`);
       pendingMap.delete(key);
     }
   }
 };
 
-// 取消所有
 export const cancelAllRequest = () => {
-  for (const cancel of pendingMap.values()) {
-    cancel('取消所有请求');
+  for (const pending of pendingMap.values()) {
+    pending.cancel('取消所有请求');
   }
   pendingMap.clear();
 };

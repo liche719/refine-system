@@ -5,15 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useAiExplain } from '@/features/AiExplain/AiExplain';
+import type { QuestionContext } from '@/features/AiExplain/AiExplain';
+import MarkdownContent from '@/components/common/MarkdownContent';
 
 // StreamingText 组件
 const StreamingText = ({
   content,
   isStreaming,
+  markdown,
 }: {
   content: string;
   isStreaming: boolean;
+  markdown: boolean;
 }) => {
+  if (markdown) {
+    return <MarkdownContent content={content} isStreaming={isStreaming} />;
+  }
   return (
     <div className="whitespace-pre-wrap leading-relaxed break-words text-sm">
       {content}
@@ -29,13 +36,21 @@ const StreamingText = ({
 interface AiChatPanelProps {
   className?: string;
   mode?: 'standard' | 'embedded';
+  questionContext?: QuestionContext;
 }
 
 export function AiChatPanel({
   className,
   mode = 'standard',
+  questionContext,
 }: AiChatPanelProps) {
-  const hookResult = useAiExplain();
+  const isEmbedded = mode === 'embedded';
+  const scope = questionContext
+    ? `embedded-question:${questionContext.questionId}`
+    : isEmbedded
+      ? 'embedded-chat'
+      : 'ai-chat';
+  const hookResult = useAiExplain(scope, questionContext);
 
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -53,8 +68,6 @@ export function AiChatPanel({
     handleKeyDown,
   } = hookResult;
 
-  const isEmbedded = mode === 'embedded';
-
   useEffect(() => {
     if (isInputExpanded && inputRef.current) {
       inputRef.current.focus();
@@ -62,7 +75,7 @@ export function AiChatPanel({
   }, [isInputExpanded]);
 
   return (
-    <Card className="shadow-lg h-full gap-0">
+    <Card className={cn('h-full gap-0 shadow-sm', className)}>
       {/* 头部标题 */}
       <CardHeader>
         <CardTitle className="text-lg">
@@ -75,7 +88,7 @@ export function AiChatPanel({
         {/* 消息列表容器 (灰色背景) */}
         <div
           className={cn(
-            'flex-1 rounded-xl overflow-hidden relative flex flex-col pt-3',
+            'relative flex flex-1 flex-col overflow-hidden rounded-lg pt-3',
             isEmbedded ? 'bg-background' : 'bg-slate-50',
           )}
         >
@@ -83,7 +96,7 @@ export function AiChatPanel({
             {/* 1. 默认欢迎语 (仅嵌入模式且无消息时显示) */}
             {isEmbedded && messages.length === 0 && (
               <div className="flex justify-start animate-in fade-in slide-in-from-left-2 duration-300">
-                <div className="bg-secondary text-white px-4 py-3 rounded-2xl text-sm shadow-sm leading-relaxed max-w-[90%]">
+                <div className="max-w-[90%] rounded-lg bg-secondary px-4 py-3 text-sm leading-relaxed text-secondary-foreground">
                   欢迎使用智能错题提问系统，请您根据什么问题提问
                 </div>
               </div>
@@ -100,16 +113,17 @@ export function AiChatPanel({
               >
                 <div
                   className={cn(
-                    'px-4 py-2.5 rounded-2xl shadow-sm max-w-[90%]',
+                    'max-w-[90%] rounded-lg px-4 py-2.5',
                     msg.role === 'user'
-                      ? 'bg-primary text-white' // 用户: 紫色
-                      : 'bg-secondary text-white border border-slate-200 ', // AI: 白色
+                      ? 'bg-primary text-primary-foreground'
+                      : 'border bg-secondary text-secondary-foreground',
                   )}
                 >
                   {/* StreamingText 组件 */}
                   <StreamingText
                     content={msg.content}
                     isStreaming={!!msg.isStreaming}
+                    markdown={msg.role === 'ai'}
                   />
                 </div>
               </div>
@@ -123,7 +137,7 @@ export function AiChatPanel({
           {/* 状态 1:嵌入时的引导按钮 */}
           {!isInputExpanded && isEmbedded && (
             <Button
-              className="w-full h-full bg-primary hover:bg-[#434bdc] text-white rounded-xl text-sm font-medium shadow-sm flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer"
+              className="flex h-full w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90"
               onClick={() => setIsInputExpanded(true)}
             >
               <Plus className="w-4 h-4" />
@@ -141,7 +155,7 @@ export function AiChatPanel({
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="请输入问题..."
-                  className="w-full h-full min-h-[50px] resize-none bg-white border border-slate-300 focus:bg-white focus-visible:ring-[#545cff] text-sm py-3 pr-2 rounded-xl shadow-sm"
+                  className="h-full min-h-[50px] w-full resize-none rounded-lg border border-input bg-card py-3 pr-2 text-sm shadow-none focus:bg-card focus-visible:ring-primary"
                   disabled={isLoading}
                 />
               </div>
@@ -150,13 +164,15 @@ export function AiChatPanel({
               <Button
                 size="icon"
                 className={cn(
-                  'h-[50px] w-[50px] shrink-0 rounded-xl shadow-sm transition-all duration-300',
+                  'size-[50px] shrink-0 rounded-lg shadow-none transition-colors',
                   isLoading
-                    ? 'bg-red-50 text-red-500 border border-red-200 hover:bg-red-100' // 加载中样式
-                    : 'bg-[#545cff] hover:bg-[#434bdc] text-white', // 默认样式
+                    ? 'border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15'
+                    : 'bg-primary text-primary-foreground hover:bg-primary/90',
                 )}
                 onClick={isLoading ? handleStop : handleSubmit}
                 disabled={!isLoading && !input.trim()}
+                aria-label={isLoading ? '停止生成' : '发送问题'}
+                title={isLoading ? '停止生成' : '发送问题'}
               >
                 {isLoading ? (
                   <div className="relative flex items-center justify-center group">
