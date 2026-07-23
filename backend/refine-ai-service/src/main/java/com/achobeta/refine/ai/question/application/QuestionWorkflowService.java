@@ -19,6 +19,7 @@ public class QuestionWorkflowService {
     private final QuestionAiPort ai;
     private final QuestionCache cache;
     private final ObjectMapper objectMapper;
+    private final QuadraticQuestionSolvabilityGuard solvabilityGuard = new QuadraticQuestionSolvabilityGuard();
 
     public QuestionWorkflowService(LearningServicePort learning, QuestionAiPort ai,
                                    QuestionCache cache, ObjectMapper objectMapper) {
@@ -77,8 +78,11 @@ public class QuestionWorkflowService {
             String content = node.path("content").asText();
             String answer = node.path("answer").asText();
             if (content.isBlank() || answer.isBlank()) throw new IllegalArgumentException("missing fields");
+            solvabilityGuard.verify(content);
             return new QuestionCandidate(null, null, content, answer, node.path("analysis").asText(),
                     context.subject(), context.knowledgePointId());
+        } catch (AppException exception) {
+            throw exception;
         } catch (Exception exception) {
             throw new AppException(10001, "AI did not return valid question JSON");
         }
