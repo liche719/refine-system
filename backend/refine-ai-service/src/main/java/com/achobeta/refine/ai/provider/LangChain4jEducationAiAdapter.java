@@ -93,8 +93,23 @@ public class LangChain4jEducationAiAdapter implements ConversationAiPort, SolveA
     }
 
     @Override
-    public String generate(String subject, String knowledgePoint) {
-        return complete(() -> assistant.generateQuestion(context(subject), context(knowledgePoint)));
+    public String generate(String subject, String knowledgePoint, String referenceContext) {
+        return complete(() -> assistant.generateQuestion(context(subject), context(knowledgePoint), context(referenceContext)));
+    }
+
+    @Override
+    public QuestionAiPort.QuestionQuality verify(String subject, String knowledgePoint, String content,
+                                                  String answer, String analysis) {
+        try {
+            QuestionQualityPayload payload = objectMapper.readValue(jsonObject(complete(() -> assistant.verifyGeneratedQuestion(
+                    context(subject), context(knowledgePoint), content, answer, analysis))), QuestionQualityPayload.class);
+            return new QuestionAiPort.QuestionQuality(Boolean.TRUE.equals(payload.valid()), trim(payload.reason()));
+        } catch (AppException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            log.warn("AI generated-question verification response was invalid", exception);
+            throw new AppException(10001, "AI 生成题校验暂时不可用");
+        }
     }
 
     @Override
@@ -179,4 +194,7 @@ public class LangChain4jEducationAiAdapter implements ConversationAiPort, SolveA
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ClassificationPayload(String subject, String knowledgePoint, String description) { }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record QuestionQualityPayload(Boolean valid, String reason) { }
 }

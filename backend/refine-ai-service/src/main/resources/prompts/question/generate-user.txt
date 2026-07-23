@@ -2,3 +2,6 @@
 知识点：{{knowledgePoint}}
 
 请按系统规定的 JSON 结构生成一道练习题。
+
+参考资料：
+{{referenceContext}}

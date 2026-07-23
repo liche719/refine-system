@@ -1,0 +1,13 @@
+Subject: {{subject}}
+Knowledge point: {{knowledgePoint}}
+
+Question:
+{{content}}
+
+Proposed answer:
+{{answer}}
+
+Proposed analysis:
+{{analysis}}
+
+Review this generated practice question.

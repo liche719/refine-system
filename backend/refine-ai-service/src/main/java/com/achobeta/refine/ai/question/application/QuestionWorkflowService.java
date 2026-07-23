@@ -3,6 +3,8 @@ package com.achobeta.refine.ai.question.application;
 import com.achobeta.refine.ai.learning.application.port.LearningServicePort;
 import com.achobeta.refine.ai.question.application.port.QuestionCache;
 import com.achobeta.refine.ai.question.application.port.QuestionAiPort;
+import com.achobeta.refine.ai.rag.application.RagSearchService;
+import com.achobeta.refine.ai.rag.application.query.RagChunk;
 import com.achobeta.refine.common.api.AppException;
 import com.achobeta.refine.contracts.learning.CreateMistakeRequest;
 import com.achobeta.refine.contracts.learning.GenerationContextResponse;
@@ -12,24 +14,25 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class QuestionWorkflowService {
     private final LearningServicePort learning;
     private final QuestionAiPort ai;
     private final QuestionCache cache;
+    private final RagSearchService ragSearch;
     private final ObjectMapper objectMapper;
-    private final QuadraticQuestionSolvabilityGuard solvabilityGuard = new QuadraticQuestionSolvabilityGuard();
 
     public QuestionWorkflowService(LearningServicePort learning, QuestionAiPort ai,
-                                   QuestionCache cache, ObjectMapper objectMapper) {
+                                   QuestionCache cache, RagSearchService ragSearch, ObjectMapper objectMapper) {
         this.learning = learning; this.ai = ai;
-        this.cache = cache; this.objectMapper = objectMapper;
+        this.cache = cache; this.ragSearch = ragSearch; this.objectMapper = objectMapper;
     }
 
     public GeneratedQuestion generate(String userId, long mistakeQuestionId) {
         GenerationContextResponse context = learning.generationContext(mistakeQuestionId, userId);
-        String output = ai.generate(context.subject(), context.knowledgePointName());
+        String output = ai.generate(context.subject(), context.knowledgePointName(), referencesFor(context));
         QuestionCandidate candidate = parse(output, context);
         String questionId = UUID.randomUUID().toString();
         QuestionCandidate stored = new QuestionCandidate(questionId, userId, candidate.content(), candidate.answer(),
@@ -71,6 +74,15 @@ public class QuestionWorkflowService {
         }
     }
 
+    private String referencesFor(GenerationContextResponse context) {
+        String subject = context.subject() == null ? "" : context.subject();
+        String knowledgePoint = context.knowledgePointName() == null ? "" : context.knowledgePointName();
+        String query = (subject + " " + knowledgePoint).trim();
+        return ragSearch.search(query, 3).stream()
+                .map(RagChunk::referenceText)
+                .collect(Collectors.joining("\n\n"));
+    }
+
     private QuestionCandidate parse(String output, GenerationContextResponse context) {
         try {
             String json = output.substring(output.indexOf('{'), output.lastIndexOf('}') + 1);
@@ -78,7 +90,9 @@ public class QuestionWorkflowService {
             String content = node.path("content").asText();
             String answer = node.path("answer").asText();
             if (content.isBlank() || answer.isBlank()) throw new IllegalArgumentException("missing fields");
-            solvabilityGuard.verify(content);
+            QuestionAiPort.QuestionQuality quality = ai.verify(
+                    context.subject(), context.knowledgePointName(), content, answer, node.path("analysis").asText());
+            if (!quality.valid()) throw new AppException(10001, "生成的练习题未通过完整性校验，请重试");
             return new QuestionCandidate(null, null, content, answer, node.path("analysis").asText(),
                     context.subject(), context.knowledgePointId());
         } catch (AppException exception) {
