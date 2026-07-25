@@ -28,6 +28,7 @@ public class LangChain4jEducationAiAdapter implements ConversationAiPort, SolveA
 
     private final RefineEducationAiService assistant;
     private final RefineConversationAiService conversationAssistant;
+    private final RefineSolveAiService solveAssistant;
     private final RedisChatMemoryStore memoryStore;
     private final ObjectMapper objectMapper;
 
@@ -35,10 +36,12 @@ public class LangChain4jEducationAiAdapter implements ConversationAiPort, SolveA
     public LangChain4jEducationAiAdapter(
             RefineEducationAiService assistant,
             RefineConversationAiService conversationAssistant,
+            RefineSolveAiService solveAssistant,
             RedisChatMemoryStore memoryStore,
             ObjectMapper objectMapper) {
         this.assistant = assistant;
         this.conversationAssistant = conversationAssistant;
+        this.solveAssistant = solveAssistant;
         this.memoryStore = memoryStore;
         this.objectMapper = objectMapper;
     }
@@ -46,24 +49,49 @@ public class LangChain4jEducationAiAdapter implements ConversationAiPort, SolveA
     LangChain4jEducationAiAdapter(
             RefineEducationAiService assistant,
             RefineConversationAiService conversationAssistant,
+            RefineSolveAiService solveAssistant,
             RedisChatMemoryStore memoryStore) {
-        this(assistant, conversationAssistant, memoryStore, new ObjectMapper());
+        this(assistant, conversationAssistant, solveAssistant, memoryStore, new ObjectMapper());
     }
 
     @Override
-    public String reply(String memoryId, String references, String message) {
+    public String reply(String memoryId, String message) {
         try {
-            return complete(() -> conversationAssistant.conversation(
-                    memoryId, context(references), message));
+            return complete(() -> conversationAssistant.conversation(memoryId, message));
         } finally {
             conversationAssistant.evictChatMemory(memoryId);
         }
     }
 
     @Override
-    public void streamReply(String memoryId, String references, String message, Consumer<String> onToken,
+    public void streamReply(String memoryId, String message, Consumer<String> onToken,
                             Runnable onComplete, Consumer<Throwable> onError) {
-        stream(() -> conversationAssistant.streamConversation(memoryId, context(references), message),
+        stream(() -> conversationAssistant.streamConversation(memoryId, message),
+                onToken,
+                () -> {
+                    conversationAssistant.evictChatMemory(memoryId);
+                    onComplete.run();
+                },
+                error -> {
+                    conversationAssistant.evictChatMemory(memoryId);
+                    onError.accept(error);
+        });
+    }
+
+    @Override
+    public String replyWithQuestion(String memoryId, String questionContent, String message) {
+        try {
+            return complete(() -> conversationAssistant.conversationWithQuestion(
+                    memoryId, context(questionContent), message));
+        } finally {
+            conversationAssistant.evictChatMemory(memoryId);
+        }
+    }
+
+    @Override
+    public void streamReplyWithQuestion(String memoryId, String questionContent, String message, Consumer<String> onToken,
+                                        Runnable onComplete, Consumer<Throwable> onError) {
+        stream(() -> conversationAssistant.streamConversationWithQuestion(memoryId, context(questionContent), message),
                 onToken,
                 () -> {
                     conversationAssistant.evictChatMemory(memoryId);
@@ -83,13 +111,13 @@ public class LangChain4jEducationAiAdapter implements ConversationAiPort, SolveA
 
     @Override
     public String solve(String questionContext) {
-        return complete(() -> assistant.solve(questionContext));
+        return complete(() -> solveAssistant.solve(questionContext));
     }
 
     @Override
     public void streamSolve(String questionContext, Consumer<String> onToken, Runnable onComplete,
                             Consumer<Throwable> onError) {
-        stream(() -> assistant.streamSolve(questionContext), onToken, onComplete, onError);
+        stream(() -> solveAssistant.streamSolve(questionContext), onToken, onComplete, onError);
     }
 
     @Override

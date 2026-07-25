@@ -11,11 +11,19 @@ interface RefineConversationAiService extends ChatMemoryAccess {
 
     @SystemMessage(fromResource = "/prompts/conversation/system.txt")
     @UserMessage(fromResource = "/prompts/conversation/user.txt")
-    String conversation(@MemoryId String memoryId, @V("references") String references,
-                        @V("message") String message);
+    String conversation(@MemoryId String memoryId, @V("message") String message);
 
     @SystemMessage(fromResource = "/prompts/conversation/system.txt")
     @UserMessage(fromResource = "/prompts/conversation/user.txt")
-    TokenStream streamConversation(@MemoryId String memoryId, @V("references") String references,
-                                   @V("message") String message);
+    TokenStream streamConversation(@MemoryId String memoryId, @V("message") String message);
+
+    @SystemMessage(fromResource = "/prompts/conversation/system.txt")
+    @UserMessage(fromResource = "/prompts/conversation/question-user.txt")
+    String conversationWithQuestion(@MemoryId String memoryId, @V("questionContent") String questionContent,
+                                    @V("message") String message);
+
+    @SystemMessage(fromResource = "/prompts/conversation/system.txt")
+    @UserMessage(fromResource = "/prompts/conversation/question-user.txt")
+    TokenStream streamConversationWithQuestion(@MemoryId String memoryId, @V("questionContent") String questionContent,
+                                               @V("message") String message);
 }

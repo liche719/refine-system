@@ -44,6 +44,7 @@ class QuestionWorkflowServiceTest {
                 .isInstanceOf(AppException.class)
                 .hasMessage("生成的练习题未通过完整性校验，请重试");
 
+        verify(ragSearch).search("历史 史料论证", 3);
         verify(cache, never()).save(any(), any());
     }
 
@@ -65,6 +66,7 @@ class QuestionWorkflowServiceTest {
         QuestionWorkflowService.GeneratedQuestion generated = service.generate("user-1", 12L);
 
         assertThat(generated.content()).isEqualTo("阅读给出的论据，判断其主要论证方法。");
+        verify(ragSearch).search("语文 论证方法", 3);
         verify(cache).save(any(), any());
     }
 

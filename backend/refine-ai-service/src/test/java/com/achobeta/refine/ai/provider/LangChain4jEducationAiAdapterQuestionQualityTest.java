@@ -11,7 +11,8 @@ import static org.mockito.Mockito.when;
 class LangChain4jEducationAiAdapterQuestionQualityTest {
     private final RefineEducationAiService educationAssistant = mock(RefineEducationAiService.class);
     private final LangChain4jEducationAiAdapter adapter = new LangChain4jEducationAiAdapter(
-            educationAssistant, mock(RefineConversationAiService.class), mock(RedisChatMemoryStore.class));
+            educationAssistant, mock(RefineConversationAiService.class), mock(RefineSolveAiService.class),
+            mock(RedisChatMemoryStore.class));
 
     @Test
     void mapsStructuredGenericQuestionQualityReview() {

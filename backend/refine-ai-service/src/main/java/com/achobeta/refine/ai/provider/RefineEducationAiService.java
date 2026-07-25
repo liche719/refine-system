@@ -7,14 +7,6 @@ import dev.langchain4j.service.V;
 
 interface RefineEducationAiService {
 
-    @SystemMessage(fromResource = "/prompts/solve/system.txt")
-    @UserMessage(fromResource = "/prompts/solve/user.txt")
-    String solve(@V("questionContext") String questionContext);
-
-    @SystemMessage(fromResource = "/prompts/solve/system.txt")
-    @UserMessage(fromResource = "/prompts/solve/user.txt")
-    TokenStream streamSolve(@V("questionContext") String questionContext);
-
     @SystemMessage(fromResource = "/prompts/question/generate-system.txt")
     @UserMessage(fromResource = "/prompts/question/generate-user.txt")
     String generateQuestion(@V("subject") String subject, @V("knowledgePoint") String knowledgePoint,

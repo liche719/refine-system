@@ -13,27 +13,37 @@ import static org.mockito.Mockito.when;
 class LangChain4jEducationAiAdapterMemoryTest {
     private final RefineEducationAiService educationAssistant = mock(RefineEducationAiService.class);
     private final RefineConversationAiService conversationAssistant = mock(RefineConversationAiService.class);
+    private final RefineSolveAiService solveAssistant = mock(RefineSolveAiService.class);
     private final RedisChatMemoryStore memoryStore = mock(RedisChatMemoryStore.class);
     private final LangChain4jEducationAiAdapter adapter = new LangChain4jEducationAiAdapter(
-            educationAssistant, conversationAssistant, memoryStore);
+            educationAssistant, conversationAssistant, solveAssistant, memoryStore);
 
     @Test
     void evictsJvmMemoryAfterSuccessfulSynchronousReply() {
-        when(conversationAssistant.conversation("user-1:conversation-1", "reference", "你好"))
-                .thenReturn("你好");
+        when(conversationAssistant.conversation("user-1:conversation-1", "你好")).thenReturn("你好");
 
-        assertThat(adapter.reply("user-1:conversation-1", "reference", "你好")).isEqualTo("你好");
+        assertThat(adapter.reply("user-1:conversation-1", "你好")).isEqualTo("你好");
         verify(conversationAssistant).evictChatMemory("user-1:conversation-1");
     }
 
     @Test
     void evictsJvmMemoryWhenModelInvocationFails() {
-        when(conversationAssistant.conversation("user-1:conversation-1", "reference", "你好"))
+        when(conversationAssistant.conversation("user-1:conversation-1", "你好"))
                 .thenThrow(new IllegalStateException("remote failure"));
 
-        assertThatThrownBy(() -> adapter.reply("user-1:conversation-1", "reference", "你好"))
+        assertThatThrownBy(() -> adapter.reply("user-1:conversation-1", "你好"))
                 .isInstanceOf(AppException.class);
         verify(conversationAssistant).evictChatMemory("user-1:conversation-1");
+    }
+
+    @Test
+    void forwardsQuestionContextToTheToolEnabledConversationService() {
+        when(conversationAssistant.conversationWithQuestion("user-1:question-1", "二次函数题目", "顶点怎么求？"))
+                .thenReturn("先调用知识库工具，再根据题目计算。");
+
+        assertThat(adapter.replyWithQuestion("user-1:question-1", "二次函数题目", "顶点怎么求？"))
+                .contains("知识库工具");
+        verify(conversationAssistant).evictChatMemory("user-1:question-1");
     }
 
     @Test

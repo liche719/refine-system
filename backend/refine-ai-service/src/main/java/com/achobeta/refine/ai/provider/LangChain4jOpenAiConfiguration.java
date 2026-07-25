@@ -2,6 +2,7 @@ package com.achobeta.refine.ai.provider;
 
 import com.achobeta.refine.ai.conversation.infrastructure.ChatMemoryProperties;
 import com.achobeta.refine.ai.conversation.infrastructure.RedisChatMemoryStore;
+import com.achobeta.refine.ai.rag.KnowledgeBaseTool;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -60,6 +61,19 @@ public class LangChain4jOpenAiConfiguration {
     }
 
     @Bean
+    RefineSolveAiService refineSolveAiService(
+            @Qualifier("openAiChatModel") ChatModel chatModel,
+            @Qualifier("openAiStreamingChatModel") StreamingChatModel streamingChatModel,
+            KnowledgeBaseTool knowledgeBaseTool) {
+        return AiServices.builder(RefineSolveAiService.class)
+                .chatModel(chatModel)
+                .streamingChatModel(streamingChatModel)
+                .tools(knowledgeBaseTool)
+                .maxToolCallingRoundTrips(2)
+                .build();
+    }
+
+    @Bean
     RedisChatMemoryStore redisChatMemoryStore(
             StringRedisTemplate redis,
             ChatMemoryProperties memoryProperties) {
@@ -71,10 +85,13 @@ public class LangChain4jOpenAiConfiguration {
             @Qualifier("openAiChatModel") ChatModel chatModel,
             @Qualifier("openAiStreamingChatModel") StreamingChatModel streamingChatModel,
             RedisChatMemoryStore memoryStore,
-            ChatMemoryProperties memoryProperties) {
+            ChatMemoryProperties memoryProperties,
+            KnowledgeBaseTool knowledgeBaseTool) {
         return AiServices.builder(RefineConversationAiService.class)
                 .chatModel(chatModel)
                 .streamingChatModel(streamingChatModel)
+                .tools(knowledgeBaseTool)
+                .maxToolCallingRoundTrips(2)
                 .chatMemoryProvider(memoryId -> MessageWindowChatMemory.builder()
                         .id(memoryId)
                         .maxMessages(memoryProperties.maxMessages())
