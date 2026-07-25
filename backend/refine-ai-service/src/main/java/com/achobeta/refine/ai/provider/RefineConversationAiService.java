@@ -7,7 +7,7 @@ import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 import dev.langchain4j.service.memory.ChatMemoryAccess;
 
-interface RefineConversationAiService extends ChatMemoryAccess {
+public interface RefineConversationAiService extends ChatMemoryAccess {
 
     @SystemMessage(fromResource = "/prompts/conversation/system.txt")
     @UserMessage(fromResource = "/prompts/conversation/user.txt")

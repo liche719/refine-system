@@ -5,7 +5,7 @@ import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
-interface RefineEducationAiService {
+public interface RefineEducationAiService {
 
     @SystemMessage(fromResource = "/prompts/question/generate-system.txt")
     @UserMessage(fromResource = "/prompts/question/generate-user.txt")

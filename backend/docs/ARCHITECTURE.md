@@ -35,6 +35,14 @@ flowchart LR
 - `refine-contracts` 只包含跨进程 DTO 和事件，不共享领域实体或 Mapper。
 - Identity Redis 只保存邮箱验证码和 refresh token；AI Redis 只保存会话记忆和生成题缓存。两个实例独立持久化、独立故障，不使用逻辑 database 假装隔离。
 
+## 服务内代码组织
+
+- Gateway 保持 feature-based：`security`、路由和限流组件直接服务于网关职责，不引入空的领域层。
+- Identity 以 `account` 为业务模块，使用 `api / application / domain / infrastructure`。账号状态和密码变更等规则放在 domain，Redis、JWT、邮件、MyBatis 和 RabbitMQ 都是 adapter。
+- Learning 以 `mistake`、`knowledge`、`overview` 为业务模块。错因、笔记、状态和复习查询都属于 mistake 聚合；复习页面不是独立写模型，避免复制错题数据或绕过聚合。
+- AI 按 `conversation`、`solve`、`question`、`ocr`、`suggestion`、`analytics`、`rag` 组织。每种能力的 application 只依赖 port；LangChain4j、Feign、Redis、PgVector、MyBatis 和 RabbitMQ 实现在对应 infrastructure 包中。
+- `refine-common` 和 `refine-contracts` 只提供跨服务基础能力与线协议，不承载业务实体或 Mapper。
+
 ## 公共路由
 
 | 路径 | 服务 |

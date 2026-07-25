@@ -5,7 +5,7 @@ import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
-interface RefineSolveAiService {
+public interface RefineSolveAiService {
 
     @SystemMessage(fromResource = "/prompts/solve/system.txt")
     @UserMessage(fromResource = "/prompts/solve/user.txt")
