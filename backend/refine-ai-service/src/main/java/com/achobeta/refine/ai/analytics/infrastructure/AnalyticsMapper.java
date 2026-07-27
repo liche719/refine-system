@@ -15,7 +15,7 @@ import java.util.List;
 
 @Mapper
 public interface AnalyticsMapper {
-    @Insert("INSERT IGNORE INTO consumed_events(event_id,event_type) VALUES(#{eventId},#{eventType})")
+    @Insert("INSERT INTO consumed_events(event_id,event_type) VALUES(#{eventId},#{eventType})")
     int markConsumed(@Param("eventId") String eventId, @Param("eventType") String eventType);
 
     @Insert("INSERT INTO user_learning_vectors(event_id,user_id,question_id,action_type,question_content," +

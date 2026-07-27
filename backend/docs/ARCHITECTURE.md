@@ -67,13 +67,13 @@ flowchart LR
 
 ## 数据与一致性
 
-每个 MySQL 账号只拥有自己的 schema。`@ReadReplica` 查询走从库，事务和未标记查询走主库；获取从库连接失败时回退主库。新写入后的立即读取不标记 `@ReadReplica`，因此固定走主库。
+每个 MySQL 账号只拥有自己的 schema。AI 分析的 `insights`、`similar-questions`、`dynamics` 是由异步领域事件构建的最终一致性读模型，使用 `@ReadReplica` 走从库；获取从库连接失败时回退主库。事务、未标记查询以及错题、知识点、概览等需要写后立即展示的核心学习查询固定走主库，避免异步复制窗口返回旧数据。
 
 MySQL 复制采用 GTID、ROW binlog 和异步复制。从库启用 `read_only` 与 `super_read_only`。不提供自动故障转移，避免在没有仲裁和 fencing 的情况下产生双主。
 
 ## 消息可靠性
 
-发布者使用同一 `eventId` 等待 Publisher Confirm，最多尝试 3 次。业务提交后最终发布失败会增加 `refine_domain_event_publish_failures_total` 并输出结构化错误，不回滚业务。消费者失败由 Spring AMQP 重试 3 次，之后进入专属 DLQ；`consumed_events.event_id` 与画像写入在同一事务中，重复消息不会重复生成画像。
+发布者使用同一 `eventId` 等待 Publisher Confirm，最多尝试 3 次。业务提交后最终发布失败会增加 `refine_domain_event_publish_failures_total` 并输出结构化错误，不回滚业务。消费者先校验事件标识、类型、版本、发生时间、用户标识和载荷，再以普通 `INSERT` 写入 `consumed_events`；只有 `event_id` 主键重复会被识别为已消费，字段截断等其他完整性异常继续抛出。消费者失败由 Spring AMQP 重试 3 次，之后进入专属 DLQ；消费标记与画像写入在同一事务中，重复消息不会重复生成画像。
 
 本设计明确接受“数据库提交成功但消息最终未发布”的窗口。彻底消除该窗口需要 Transactional Outbox，不属于当前版本。
 

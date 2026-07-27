@@ -5,7 +5,9 @@ import com.achobeta.refine.ai.analytics.application.query.InsightRow;
 import com.achobeta.refine.ai.analytics.application.query.LearningVectorRow;
 import com.achobeta.refine.ai.analytics.application.query.WeaknessRow;
 import com.achobeta.refine.ai.shared.application.port.TextEmbeddingPort;
+import com.achobeta.refine.common.datasource.ReadReplica;
 import com.achobeta.refine.contracts.event.EventEnvelope;
+import com.achobeta.refine.contracts.event.EventTopics;
 import com.achobeta.refine.contracts.event.LearningActivityPayload;
 import com.achobeta.refine.contracts.event.UserLoggedInPayload;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -23,6 +25,8 @@ import java.util.Map;
 @Service
 public class LearningAnalysisService {
     private static final int SEARCH_CANDIDATES = 200;
+    private static final int CURRENT_EVENT_VERSION = 1;
+    private static final int MAX_USER_ID_LENGTH = 50;
 
     private final AnalyticsRepository repository;
     private final ObjectMapper objectMapper;
@@ -39,6 +43,7 @@ public class LearningAnalysisService {
 
     @Transactional
     public boolean consume(EventEnvelope<LearningActivityPayload> event) {
+        validateEnvelope(event, EventTopics.LEARNING_ACTIVITY_RECORDED);
         if (!repository.markConsumed(event.eventId().toString(), event.eventType())) {
             return false;
         }
@@ -54,6 +59,7 @@ public class LearningAnalysisService {
 
     @Transactional
     public boolean consumeLogin(EventEnvelope<UserLoggedInPayload> event) {
+        validateEnvelope(event, EventTopics.USER_LOGGED_IN);
         if (!repository.markConsumed(event.eventId().toString(), event.eventType())) {
             return false;
         }
@@ -67,10 +73,12 @@ public class LearningAnalysisService {
         return true;
     }
 
+    @ReadReplica
     public List<Insight> insights(String userId, String type) {
         return repository.findInsights(userId, type).stream().map(this::toInsight).toList();
     }
 
+    @ReadReplica
     public List<SimilarQuestion> similarQuestions(String userId, String queryText, int requestedLimit) {
         int limit = Math.min(Math.max(requestedLimit, 1), 20);
         double[] query = embeddings.embed(queryText);
@@ -84,6 +92,7 @@ public class LearningAnalysisService {
                 .toList();
     }
 
+    @ReadReplica
     public List<LearningDynamic> dynamics(String userId) {
         return repository.recentVectors(userId, 20).stream().map(row -> {
             String actionType = row.actionType();
@@ -127,6 +136,34 @@ public class LearningAnalysisService {
         if (activeDays >= 5) {
             saveInsight(userId, "achievement", "学习坚持性优秀", "近一周有" + activeDays + "天进行了学习",
                     0.8D, List.of());
+        }
+    }
+
+    private void validateEnvelope(EventEnvelope<?> event, String expectedEventType) {
+        if (event == null) {
+            throw new IllegalArgumentException("Event envelope must not be null");
+        }
+        if (event.eventId() == null) {
+            throw new IllegalArgumentException("Event id must not be null");
+        }
+        if (!expectedEventType.equals(event.eventType())) {
+            throw new IllegalArgumentException("Unexpected event type: " + event.eventType());
+        }
+        if (event.version() != CURRENT_EVENT_VERSION) {
+            throw new IllegalArgumentException("Unsupported event version: " + event.version());
+        }
+        if (event.occurredAt() == null) {
+            throw new IllegalArgumentException("Event occurrence time must not be null");
+        }
+        if (event.payload() == null) {
+            throw new IllegalArgumentException("Event payload must not be null");
+        }
+        String userId = event.userId();
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("Event user id must not be blank");
+        }
+        if (userId.length() > MAX_USER_ID_LENGTH) {
+            throw new IllegalArgumentException("Event user id exceeds " + MAX_USER_ID_LENGTH + " characters");
         }
     }
 

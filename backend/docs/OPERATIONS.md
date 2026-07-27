@@ -47,16 +47,17 @@ docker compose -p refine-microservices --env-file .env -f docker-compose.infra.y
 
 ## 从库故障回退
 
-`FallbackDataSource` 保留从库不可用时回退主库的能力。当前错题、知识点、概览等用户刚写入后会立即展示的查询固定使用主库，以避免异步复制窗口造成旧数据；将来新增 `@ReadReplica` 读模型时，可按以下步骤演练回退：
+`FallbackDataSource` 在从库连接获取失败时回退主库。AI 分析的 `/insights`、`/similar-questions` 和 `/dynamics` 是实际使用 `@ReadReplica` 的最终一致性读模型；错题、知识点、概览等用户写入后立即展示的查询固定使用主库。可按以下步骤演练真实读模型的回退：
 
 ```powershell
 docker compose -p refine-microservices --env-file .env -f docker-compose.infra.yml stop mysql-replica
-# 调用新增的 @ReadReplica 读模型，确认日志包含回退信息。
+$headers = @{ Authorization = "Bearer <有效的 access token>" }
+Invoke-WebRequest http://localhost:8080/api/v1/learning-analysis/insights -Headers $headers -UseBasicParsing
 docker compose -p refine-microservices --env-file .env -f docker-compose.infra.yml start mysql-replica
 docker compose -p refine-microservices --env-file .env -f docker-compose.infra.yml run --rm mysql-replica-init
 ```
 
-日志应包含 `Replica unavailable; routing read to primary`。主库故障不会自动切换。
+请求应保持 HTTP 200，AI 服务日志应包含 `Replica unavailable; routing read to primary`。连接超时后才会回退，因此演练请求可能比正常查询慢约 5 秒；主库故障不会自动切换。
 
 ## 手动提升从库
 
@@ -77,6 +78,14 @@ AI 队列：
 - 对应 `.dlq` 队列
 
 制造无法反序列化或消费异常的消息后，确认主队列完成 3 次消费尝试，消息进入 `.dlq`。重新投递前应修复消息或消费者；相同 `eventId` 的成功消息会被 `consumed_events` 去重。
+
+不改动业务消息、仅验证 broker 的拒绝到死信路由时，可运行：
+
+```powershell
+.\deploy\scripts\verify-rabbitmq-dlq.ps1
+```
+
+脚本会创建随机命名的临时交换机和队列，拒绝一条探测消息并从 DLQ 读取它后自动清理这些资源。
 
 ## Sentinel
 

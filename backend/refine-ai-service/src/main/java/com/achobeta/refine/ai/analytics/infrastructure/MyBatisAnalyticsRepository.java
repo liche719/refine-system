@@ -4,6 +4,7 @@ import com.achobeta.refine.ai.analytics.application.port.AnalyticsRepository;
 import com.achobeta.refine.ai.analytics.application.query.InsightRow;
 import com.achobeta.refine.ai.analytics.application.query.LearningVectorRow;
 import com.achobeta.refine.ai.analytics.application.query.WeaknessRow;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,7 +13,14 @@ import java.util.List;
 public class MyBatisAnalyticsRepository implements AnalyticsRepository {
     private final AnalyticsMapper mapper;
     public MyBatisAnalyticsRepository(AnalyticsMapper mapper) { this.mapper = mapper; }
-    @Override public boolean markConsumed(String eventId, String eventType) { return mapper.markConsumed(eventId, eventType) > 0; }
+    @Override
+    public boolean markConsumed(String eventId, String eventType) {
+        try {
+            return mapper.markConsumed(eventId, eventType) > 0;
+        } catch (DuplicateKeyException exception) {
+            return false;
+        }
+    }
     @Override public void insertVector(String eventId, String userId, String questionId, String actionType,
                                        String questionContent, String subject, Integer knowledgePointId,
                                        String embeddingText, String embeddingModel, String metadataText) {
