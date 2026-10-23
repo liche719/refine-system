@@ -9,6 +9,8 @@ import com.achobeta.refine.contracts.event.LearningActivityPayload;
 import com.achobeta.refine.contracts.event.UserLoggedInPayload;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.List;
@@ -19,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,18 +47,20 @@ class LearningAnalysisServiceTest {
     }
 
     @Test
-    void duplicateEventDoesNotCallRemoteEmbedding() {
+    void duplicateEventDoesNotPersistVectorOrInsights() {
         AnalyticsRepository repository = mock(AnalyticsRepository.class);
         when(repository.markConsumed(anyString(), anyString())).thenReturn(false);
         TextEmbeddingPort embeddings = embeddings();
         LearningAnalysisService service = new LearningAnalysisService(
-                repository, new ObjectMapper(), embeddings, new VectorCodec());
+                repository, new ObjectMapper(), embeddings, new VectorCodec(), inlineTransactionTemplate());
 
         assertThat(service.consume(event())).isFalse();
 
-        verify(embeddings, never()).embed(anyString());
+        // embedding 在事务外计算（避免远程调用占住数据库连接），所以重复投递仍会算一次向量；
+        // 但去重之后不会写向量、不会重算洞察，这才是幂等要保证的部分。
         verify(repository, never()).insertVector(anyString(), anyString(), anyString(), anyString(), anyString(),
                 any(), any(), anyString(), anyString(), anyString());
+        verify(repository, never()).deleteInsights(anyString());
     }
 
     @Test
@@ -116,6 +121,15 @@ class LearningAnalysisServiceTest {
     }
 
     @Test
+    void acceptsOlderEventVersionsAndRejectsUnknownNewerOnes() {
+        // 消费者升级到 v2 之后，队列里在途的 v1 消息仍应被消费，而不是全部进死信
+        assertThat(LearningAnalysisService.isSupportedVersion(1, 2)).isTrue();
+        assertThat(LearningAnalysisService.isSupportedVersion(2, 2)).isTrue();
+        assertThat(LearningAnalysisService.isSupportedVersion(3, 2)).isFalse();
+        assertThat(LearningAnalysisService.isSupportedVersion(0, 2)).isFalse();
+    }
+
+    @Test
     void routesOnlyEventuallyConsistentQueriesToReadReplica() throws NoSuchMethodException {
         assertThat(LearningAnalysisService.class.getMethod("insights", String.class, String.class)
                 .isAnnotationPresent(ReadReplica.class)).isTrue();
@@ -133,7 +147,16 @@ class LearningAnalysisServiceTest {
     }
 
     private LearningAnalysisService service(AnalyticsRepository repository) {
-        return new LearningAnalysisService(repository, new ObjectMapper(), embeddings(), new VectorCodec());
+        return new LearningAnalysisService(repository, new ObjectMapper(), embeddings(), new VectorCodec(),
+                inlineTransactionTemplate());
+    }
+
+    @SuppressWarnings("unchecked")
+    private TransactionTemplate inlineTransactionTemplate() {
+        TransactionTemplate template = mock(TransactionTemplate.class);
+        doAnswer(invocation -> ((TransactionCallback<Object>) invocation.getArgument(0)).doInTransaction(null))
+                .when(template).execute(any(TransactionCallback.class));
+        return template;
     }
 
     private TextEmbeddingPort embeddings() {

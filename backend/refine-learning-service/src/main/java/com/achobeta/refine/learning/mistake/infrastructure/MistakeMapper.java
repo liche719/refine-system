@@ -1,6 +1,6 @@
 package com.achobeta.refine.learning.mistake.infrastructure;
 
-import com.achobeta.refine.contracts.learning.GenerationContextResponse;
+import com.achobeta.refine.learning.mistake.application.query.GenerationContext;
 import com.achobeta.refine.learning.mistake.application.query.NamedCount;
 import com.achobeta.refine.learning.mistake.application.query.ReviewTrend;
 import com.achobeta.refine.learning.mistake.application.query.TrickyKnowledge;
@@ -50,7 +50,14 @@ public interface MistakeMapper {
             "COALESCE(k.knowledge_point_name,'未分类知识点') AS knowledgePointName,m.question_content AS questionContent " +
             "FROM MistakeQuestion m LEFT JOIN knowledgePoint k ON k.user_id=m.user_id AND k.knowledge_point_id=m.knowledge_point_id " +
             "WHERE m.id=#{id} AND m.user_id=#{userId}")
-    GenerationContextResponse findGenerationContext(@Param("id") long id, @Param("userId") String userId);
+    @ConstructorArgs({
+            @Arg(column = "mistakeQuestionId", javaType = Long.class),
+            @Arg(column = "subject", javaType = String.class),
+            @Arg(column = "knowledgePointId", javaType = Integer.class),
+            @Arg(column = "knowledgePointName", javaType = String.class),
+            @Arg(column = "questionContent", javaType = String.class)
+    })
+    GenerationContext findGenerationContext(@Param("id") long id, @Param("userId") String userId);
 
     @Select("<script>SELECT m.* FROM MistakeQuestion m LEFT JOIN knowledgePoint k " +
             "ON k.user_id=m.user_id AND k.knowledge_point_id=m.knowledge_point_id WHERE m.user_id=#{userId}" +

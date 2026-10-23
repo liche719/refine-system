@@ -7,6 +7,7 @@ import com.achobeta.refine.contracts.learning.CreateMistakeResponse;
 import com.achobeta.refine.contracts.learning.GenerationContextResponse;
 import com.achobeta.refine.learning.mistake.application.port.LearningActivityPublisher;
 import com.achobeta.refine.learning.mistake.application.port.MistakeRepository;
+import com.achobeta.refine.learning.mistake.application.query.GenerationContext;
 import com.achobeta.refine.learning.mistake.application.query.MistakeFilter;
 import com.achobeta.refine.learning.mistake.application.query.MistakePage;
 import com.achobeta.refine.learning.mistake.application.query.NamedCount;
@@ -53,9 +54,12 @@ public class MistakeService {
     }
 
     public GenerationContextResponse generationContext(long id, String userId) {
-        GenerationContextResponse context = repository.findGenerationContext(id, userId);
+        GenerationContext context = repository.findGenerationContext(id, userId);
         if (context == null) throw notFound();
-        return context;
+        // 在这里把本地投影映射成跨进程契约：mapper 不再直接产出 contracts 的类型，
+        // 改一列不会同时牵动两个服务的发布节奏。
+        return new GenerationContextResponse(context.mistakeQuestionId(), context.subject(),
+                context.knowledgePointId(), context.knowledgePointName(), context.questionContent());
     }
 
     public MistakeQuestion reasons(String userId, String questionId) {

@@ -15,6 +15,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -32,29 +33,47 @@ public class LearningAnalysisService {
     private final ObjectMapper objectMapper;
     private final TextEmbeddingPort embeddings;
     private final VectorCodec vectors;
+    private final TransactionTemplate transactionTemplate;
 
     public LearningAnalysisService(AnalyticsRepository repository, ObjectMapper objectMapper,
-                                   TextEmbeddingPort embeddings, VectorCodec vectors) {
+                                   TextEmbeddingPort embeddings, VectorCodec vectors,
+                                   TransactionTemplate transactionTemplate) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.embeddings = embeddings;
         this.vectors = vectors;
+        this.transactionTemplate = transactionTemplate;
     }
 
-    @Transactional
+    /**
+     * 消费学习活动事件。
+     *
+     * <p>注意这里刻意不用 {@code @Transactional} 包住整个方法：embedding 是一次可能长达数十秒、
+     * 还带重试的远程调用，如果放在事务里，数据库连接会被整段时间占用，消息一多就会把连接池打满。
+     * 因此先做校验与向量计算（无事务），再在短事务里完成去重标记、写向量和重算洞察。
+     * 代价是重复投递会多算一次 embedding——重复投递本身很少，比长期占用连接划算。
+     */
     public boolean consume(EventEnvelope<LearningActivityPayload> event) {
         validateEnvelope(event, EventTopics.LEARNING_ACTIVITY_RECORDED);
-        if (!repository.markConsumed(event.eventId().toString(), event.eventType())) {
-            return false;
-        }
         LearningActivityPayload payload = event.payload();
         String vectorText = String.join(" ", safe(payload.actionType()), safe(payload.subject()),
                 safe(payload.questionContent()));
-        repository.insertVector(event.eventId().toString(), event.userId(), payload.questionId(), payload.actionType(),
-                payload.questionContent(), payload.subject(), payload.knowledgePointId(),
-                vectors.serialize(embeddings.embed(vectorText)), embeddings.modelName(), metadata(payload));
-        rebuildInsights(event.userId());
-        return true;
+        double[] embedding = embeddings.embed(vectorText);
+        String embeddingText = vectors.serialize(embedding);
+        String modelName = embeddings.modelName();
+        String metadata = metadata(payload);
+
+        Boolean consumed = transactionTemplate.execute(status -> {
+            if (!repository.markConsumed(event.eventId().toString(), event.eventType())) {
+                return false;
+            }
+            repository.insertVector(event.eventId().toString(), event.userId(), payload.questionId(),
+                    payload.actionType(), payload.questionContent(), payload.subject(), payload.knowledgePointId(),
+                    embeddingText, modelName, metadata);
+            rebuildInsights(event.userId());
+            return true;
+        });
+        return Boolean.TRUE.equals(consumed);
     }
 
     @Transactional
@@ -149,7 +168,9 @@ public class LearningAnalysisService {
         if (!expectedEventType.equals(event.eventType())) {
             throw new IllegalArgumentException("Unexpected event type: " + event.eventType());
         }
-        if (event.version() != CURRENT_EVENT_VERSION) {
+        // 只拒绝「未知的更新版本」，不要求严格等值：消费者升级后，队列里在途的旧版本消息
+        // 仍然按当前处理逻辑消费，否则一次升级会把积压消息全部推入死信。
+        if (!isSupportedVersion(event.version(), CURRENT_EVENT_VERSION)) {
             throw new IllegalArgumentException("Unsupported event version: " + event.version());
         }
         if (event.occurredAt() == null) {
@@ -165,6 +186,16 @@ public class LearningAnalysisService {
         if (userId.length() > MAX_USER_ID_LENGTH) {
             throw new IllegalArgumentException("Event user id exceeds " + MAX_USER_ID_LENGTH + " characters");
         }
+    }
+
+    /**
+     * 事件版本兼容性：支持 [1, current]。
+     *
+     * <p>要求严格等值的写法在升级消费者时会把队列里在途的旧版本消息全部推向死信；
+     * 只有「比当前更新」的版本才应该拒绝，因为那说明消费者还没跟上协议。
+     */
+    static boolean isSupportedVersion(int eventVersion, int currentVersion) {
+        return eventVersion >= 1 && eventVersion <= currentVersion;
     }
 
     private void saveInsight(String userId, String type, String title, String description,

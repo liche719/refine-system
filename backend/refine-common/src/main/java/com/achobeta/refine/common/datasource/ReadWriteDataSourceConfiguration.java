@@ -23,10 +23,15 @@ public class ReadWriteDataSourceConfiguration {
             @Value("${refine.datasource.replica-url}") String replicaUrl,
             @Value("${refine.datasource.username}") String username,
             @Value("${refine.datasource.password}") String password,
-            @Value("${refine.datasource.maximum-pool-size:10}") int maximumPoolSize) {
-        HikariDataSource primary = create("primary", primaryUrl, username, password, maximumPoolSize, true);
-        HikariDataSource replica = create("replica", replicaUrl, username, password, maximumPoolSize, false);
-        FallbackDataSource fallbackReplica = new FallbackDataSource(replica, primary);
+            @Value("${refine.datasource.maximum-pool-size:10}") int maximumPoolSize,
+            @Value("${refine.datasource.replica-connection-timeout-ms:800}") int replicaConnectionTimeoutMs,
+            @Value("${refine.datasource.replica-circuit-open-ms:10000}") long replicaCircuitOpenMs) {
+        HikariDataSource primary = create("primary", primaryUrl, username, password, maximumPoolSize, 5_000, true);
+        // 从库连接超时单独收紧：从库不可达时，5s 的等待会被流量放大成线程/连接池耗尽。
+        HikariDataSource replica = create("replica", replicaUrl, username, password, maximumPoolSize,
+                replicaConnectionTimeoutMs, false);
+        FallbackDataSource fallbackReplica = new FallbackDataSource(
+                replica, primary, new ReplicaCircuitBreaker(replicaCircuitOpenMs));
 
         AbstractRoutingDataSource routing = new AbstractRoutingDataSource() {
             @Override
@@ -41,7 +46,7 @@ public class ReadWriteDataSourceConfiguration {
     }
 
     private HikariDataSource create(String name, String url, String username, String password,
-                                    int maximumPoolSize, boolean failFast) {
+                                    int maximumPoolSize, int connectionTimeoutMs, boolean failFast) {
         HikariConfig config = new HikariConfig();
         config.setPoolName("refine-" + name);
         config.setJdbcUrl(url);
@@ -50,7 +55,7 @@ public class ReadWriteDataSourceConfiguration {
         config.setDriverClassName("com.mysql.cj.jdbc.Driver");
         config.setMaximumPoolSize(maximumPoolSize);
         config.setMinimumIdle(1);
-        config.setConnectionTimeout(5_000);
+        config.setConnectionTimeout(connectionTimeoutMs);
         config.setInitializationFailTimeout(failFast ? 1 : -1);
         return new HikariDataSource(config);
     }

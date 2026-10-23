@@ -1,6 +1,6 @@
 package com.achobeta.refine.learning.mistake.infrastructure;
 
-import com.achobeta.refine.contracts.learning.GenerationContextResponse;
+import com.achobeta.refine.learning.mistake.application.query.GenerationContext;
 import com.achobeta.refine.learning.mistake.application.port.MistakeRepository;
 import com.achobeta.refine.learning.mistake.application.query.MistakeFilter;
 import com.achobeta.refine.learning.mistake.application.query.NamedCount;
@@ -34,7 +34,7 @@ public class MistakeRepositoryAdapter implements MistakeRepository {
                 question.source(), null, null);
     }
 
-    @Override public GenerationContextResponse findGenerationContext(long id, String userId) { return mapper.findGenerationContext(id, userId); }
+    @Override public GenerationContext findGenerationContext(long id, String userId) { return mapper.findGenerationContext(id, userId); }
     @Override public void updateReasons(MistakeQuestion question) { mapper.updateReasons(question); }
     @Override public void updateNote(MistakeQuestion question) { mapper.updateNote(question.userId(), question.questionId(), question.studyNote()); }
 

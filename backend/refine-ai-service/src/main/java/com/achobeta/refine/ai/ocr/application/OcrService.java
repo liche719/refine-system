@@ -11,6 +11,8 @@ import com.achobeta.refine.contracts.learning.CreateMistakeResponse;
 import com.achobeta.refine.contracts.learning.EnsureKnowledgePointRequest;
 import org.springframework.stereotype.Service;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
 @Service
@@ -37,7 +39,10 @@ public class OcrService {
         if (question.isBlank()) {
             throw new AppException(10003, "AI did not extract a question");
         }
-        String questionId = UUID.randomUUID().toString();
+        // 用上传内容的 SHA-256 派生 questionId，而不是随机 UUID：
+        // Feign 超时重试会把同一张图重复提交，随机 ID 会让 (user_id, question_id) 唯一键失效，
+        // 同一道题被重复入库并重复发事件；用内容派生后重试落到同一条记录，Learning 侧直接返回已有数据。
+        String questionId = deterministicQuestionId(bytes);
         QuestionClassification classified = classification.classify(question);
         Integer knowledgePointId = null;
         String subject = null;
@@ -57,6 +62,15 @@ public class OcrService {
     public record OcrResult(String questionText, String questionId, String subject, String knowledgePoint) {
         public OcrResult(String questionText, String questionId) {
             this(questionText, questionId, null, null);
+        }
+    }
+
+    private static String deterministicQuestionId(byte[] bytes) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes == null ? new byte[0] : bytes);
+            return UUID.nameUUIDFromBytes(digest).toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
         }
     }
 }

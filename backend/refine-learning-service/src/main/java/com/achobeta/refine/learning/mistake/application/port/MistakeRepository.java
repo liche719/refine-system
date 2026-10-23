@@ -1,6 +1,6 @@
 package com.achobeta.refine.learning.mistake.application.port;
 
-import com.achobeta.refine.contracts.learning.GenerationContextResponse;
+import com.achobeta.refine.learning.mistake.application.query.GenerationContext;
 import com.achobeta.refine.learning.mistake.application.query.MistakeFilter;
 import com.achobeta.refine.learning.mistake.application.query.NamedCount;
 import com.achobeta.refine.learning.mistake.application.query.ReviewTrend;
@@ -12,7 +12,7 @@ import java.util.List;
 public interface MistakeRepository {
     MistakeQuestion find(String userId, String questionId);
     MistakeQuestion create(MistakeQuestion question);
-    GenerationContextResponse findGenerationContext(long id, String userId);
+    GenerationContext findGenerationContext(long id, String userId);
     void updateReasons(MistakeQuestion question);
     void updateNote(MistakeQuestion question);
     List<MistakeQuestion> findPage(String userId, MistakeFilter filter, int offset, int size);

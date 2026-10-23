@@ -44,7 +44,7 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:?Set MAIL_PASSWORD in .env}
       SW_AGENT_NAME: refine-identity-service
       SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
-      SW_AGENT_SAMPLE_N_PER_3_SECS: -1
+      SW_AGENT_SAMPLE_N_PER_3_SECS: ${SW_AGENT_SAMPLE_N_PER_3_SECS:1000}
     depends_on:
       mysql-replica-init: {condition: service_completed_successfully}
       nacos-config-init: {condition: service_completed_successfully}
@@ -70,7 +70,7 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SW_AGENT_NAME: refine-learning-service
       SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
-      SW_AGENT_SAMPLE_N_PER_3_SECS: -1
+      SW_AGENT_SAMPLE_N_PER_3_SECS: ${SW_AGENT_SAMPLE_N_PER_3_SECS:1000}
     depends_on:
       mysql-replica-init: {condition: service_completed_successfully}
       nacos-config-init: {condition: service_completed_successfully}
@@ -99,7 +99,7 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SW_AGENT_NAME: refine-ai-service
       SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
-      SW_AGENT_SAMPLE_N_PER_3_SECS: -1
+      SW_AGENT_SAMPLE_N_PER_3_SECS: ${SW_AGENT_SAMPLE_N_PER_3_SECS:1000}
     volumes:
       - ./docs/rag:/app/docs/rag:ro
     depends_on:
@@ -127,7 +127,7 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SW_AGENT_NAME: refine-gateway
       SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
-      SW_AGENT_SAMPLE_N_PER_3_SECS: -1
+      SW_AGENT_SAMPLE_N_PER_3_SECS: ${SW_AGENT_SAMPLE_N_PER_3_SECS:1000}
     ports: ["8080:8080"]
     depends_on:
       nacos-config-init: {condition: service_completed_successfully}
