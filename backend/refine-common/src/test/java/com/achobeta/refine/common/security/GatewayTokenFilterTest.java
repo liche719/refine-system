@@ -49,4 +49,21 @@ class GatewayTokenFilterTest {
 
         verify(internalChain).doFilter(internalRequest, internalResponse);
     }
+
+    @Test
+    void allowsOnlyHealthAndInfoUnderActuator() throws Exception {
+        MockHttpServletRequest health = new MockHttpServletRequest("GET", "/actuator/health");
+        MockHttpServletResponse healthResponse = new MockHttpServletResponse();
+        var healthChain = mock(jakarta.servlet.FilterChain.class);
+        filter.doFilter(health, healthResponse, healthChain);
+
+        verify(healthChain).doFilter(health, healthResponse);
+
+        // env/beans 这类端点一旦被暴露，必须仍然要求网关令牌
+        MockHttpServletRequest env = new MockHttpServletRequest("GET", "/actuator/env");
+        MockHttpServletResponse envResponse = new MockHttpServletResponse();
+        filter.doFilter(env, envResponse, mock());
+
+        assertThat(envResponse.getStatus()).isEqualTo(401);
+    }
 }

@@ -60,6 +60,9 @@ public class AccountService {
         UserAccount account = accounts.findByAccount(accountName);
         if (account == null) throw new AppException(2007, "account does not exist");
         accounts.updatePassword(account.changePassword(passwords.hash(password)));
+        // 重置密码意味着「账号可能已经泄露」，撤销该用户全部 refresh token。
+        // 这一步在事务内执行 Redis 写：若随后事务回滚，代价只是多要求一次登录，方向是安全的。
+        tokens.revokeAll(account.userId());
     }
 
     @Transactional
@@ -69,6 +72,8 @@ public class AccountService {
             throw new AppException(2003, "original password is incorrect");
         }
         accounts.updatePassword(account.changePassword(passwords.hash(newPassword)));
+        // 改密后踢掉其他设备：攻击者即使持有 refresh token 也无法继续换新 access token。
+        tokens.revokeAll(userId);
     }
 
     public AccountResults.Refresh refreshToken(String refreshToken) {

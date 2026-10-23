@@ -67,6 +67,11 @@ refine:
     enabled: true
     from: ${spring.mail.username}
     code-ttl: PT5M
+    # 同一账号的发码冷却，避免被当作邮件轰炸入口
+    resend-cooldown: PT1M
+    # 校验失败上限，达到后当前验证码作废，阻断 6 位码枚举
+    max-attempts: 5
+    attempt-window: PT10M
 
 management:
   endpoints:

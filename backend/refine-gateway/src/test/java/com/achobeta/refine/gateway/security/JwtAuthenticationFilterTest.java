@@ -35,6 +35,14 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void rejectsJwtSecretShorterThanHmacSha256Requires() {
+        // 弱密钥等于可以离线爆破后伪造任意 userId 的 access token
+        assertThatThrownBy(() -> new GatewaySecurityProperties("too-short", GATEWAY_TOKEN, List.of()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("at least 32");
+    }
+
+    @Test
     void replacesSpoofedIdentityWithVerifiedClaim() {
         String token = JWT.create()
                 .withClaim("type", "access")

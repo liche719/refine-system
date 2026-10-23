@@ -29,7 +29,12 @@ public class GatewayTokenFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/internal/") || path.startsWith("/actuator/");
+        // 只放行健康检查与信息端点。原来放行整个 /actuator/**，
+        // 一旦有人把 management.endpoints.web.exposure.include 改成 *，配置就会无鉴权可读。
+        boolean publicActuator = path.equals("/actuator/health")
+                || path.startsWith("/actuator/health/")
+                || path.equals("/actuator/info");
+        return path.startsWith("/internal/") || path.startsWith("/actuator/") && publicActuator;
     }
 
     @Override

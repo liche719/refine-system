@@ -18,6 +18,8 @@ import java.util.UUID;
 @Component
 public class JwtRedisTokenAdapter implements TokenPort {
     private static final String REFRESH_PREFIX = "identity:refresh-token:";
+    private static final String VERSION_PREFIX = "identity:token-version:";
+
     private final StringRedisTemplate redis;
     private final Algorithm algorithm;
     private final JWTVerifier verifier;
@@ -36,7 +38,12 @@ public class JwtRedisTokenAdapter implements TokenPort {
         Instant now = Instant.now();
         String access = accessToken(userId, now);
         String jti = UUID.randomUUID().toString();
-        String refresh = JWT.create().withClaim("userId", userId).withClaim("type", "refresh").withJWTId(jti)
+        // 把当前 token 版本写进 refresh token：改密后版本自增，旧 refresh 立刻失效。
+        // 不用「签发时间 < 撤销时间」判断，是因为 JWT 的 iat 只有秒级精度，
+        // 同一秒内「撤销后重新登录」和「签发后马上撤销」无法区分。
+        String refresh = JWT.create().withClaim("userId", userId).withClaim("type", "refresh")
+                .withClaim("ver", currentVersion(userId))
+                .withJWTId(jti)
                 .withIssuedAt(Date.from(now)).withExpiresAt(Date.from(now.plus(refreshTtl))).sign(algorithm);
         redis.opsForValue().set(REFRESH_PREFIX + jti, userId, refreshTtl);
         return new TokenPair(access, refresh);
@@ -58,6 +65,25 @@ public class JwtRedisTokenAdapter implements TokenPort {
         }
     }
 
+    @Override
+    public void revokeAll(String userId) {
+        String key = VERSION_PREFIX + userId;
+        redis.opsForValue().increment(key);
+        redis.expire(key, refreshTtl);
+    }
+
+    private long currentVersion(String userId) {
+        String raw = redis.opsForValue().get(VERSION_PREFIX + userId);
+        if (raw == null || raw.isBlank()) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException exception) {
+            return 0L;
+        }
+    }
+
     private String accessToken(String userId, Instant now) {
         return JWT.create().withClaim("userId", userId).withClaim("type", "access")
                 .withIssuedAt(Date.from(now)).withExpiresAt(Date.from(now.plus(accessTtl))).sign(algorithm);
@@ -68,7 +94,12 @@ public class JwtRedisTokenAdapter implements TokenPort {
             DecodedJWT decoded = verifier.verify(refreshToken);
             String userId = decoded.getClaim("userId").asString();
             String activeUser = decoded.getId() == null ? null : redis.opsForValue().get(REFRESH_PREFIX + decoded.getId());
-            if (!"refresh".equals(decoded.getClaim("type").asString()) || userId == null || !userId.equals(activeUser)) {
+            Long version = decoded.getClaim("ver").asLong();
+            boolean staleVersion = version == null || version != currentVersion(userId);
+            if (!"refresh".equals(decoded.getClaim("type").asString())
+                    || userId == null
+                    || !userId.equals(activeUser)
+                    || staleVersion) {
                 throw new AppException(401, "refresh-token is no longer active");
             }
             return decoded;

@@ -84,4 +84,44 @@ class AccountServiceTest {
         assertThatThrownBy(() -> service.register(command))
                 .isInstanceOfSatisfying(AppException.class, exception -> assertThat(exception.getCode()).isEqualTo(2012));
     }
+
+    @Test
+    void revokesEveryRefreshTokenAfterPasswordChange() {
+        UserAccount account = new UserAccount(1L, "user-1", "Student", "student@example.com",
+                "old-hash", 1, LocalDateTime.now());
+        when(accounts.findById("user-1")).thenReturn(account);
+        when(passwords.matches("OldPassword1", "old-hash")).thenReturn(true);
+        when(passwords.hash("NewPassword1")).thenReturn("new-hash");
+
+        service.updatePassword("user-1", "OldPassword1", "NewPassword1");
+
+        // 改密后必须踢掉其他设备，否则攻击者手里的 refresh token 还能继续换 access token
+        verify(tokens).revokeAll("user-1");
+    }
+
+    @Test
+    void revokesEveryRefreshTokenAfterPasswordReset() {
+        UserAccount account = new UserAccount(1L, "user-1", "Student", "student@example.com",
+                "old-hash", 1, LocalDateTime.now());
+        when(accounts.findByAccount("student@example.com")).thenReturn(account);
+        when(passwords.hash("NewPassword1")).thenReturn("new-hash");
+
+        service.resetPassword("student@example.com", "NewPassword1", "123456");
+
+        verify(emailCodes).verify("student@example.com", "123456");
+        verify(tokens).revokeAll("user-1");
+    }
+
+    @Test
+    void doesNotRevokeTokensOnSuccessfulLogin() {
+        UserAccount account = new UserAccount(1L, "user-1", "Student", "student@example.com",
+                "password-hash", 1, LocalDateTime.now());
+        when(accounts.findByAccount("student@example.com")).thenReturn(account);
+        when(passwords.matches("Password1", "password-hash")).thenReturn(true);
+        when(tokens.issue("user-1")).thenReturn(new TokenPort.TokenPair("access", "refresh"));
+
+        service.login(new AccountCommands.Login("student@example.com", "Password1"));
+
+        verify(tokens, never()).revokeAll(org.mockito.ArgumentMatchers.anyString());
+    }
 }
